@@ -185,17 +185,41 @@ def formatear_anguila(numeros, df):
         lineas.append(f"`{num:<4}{count:<6}{pct:.1f}% {hrs:<15}`")
     return "\n".join(lineas)
 
+def iniciar_health_server():
+    import threading
+    import os
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    port = int(os.environ.get("PORT", 10000))
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        def log_message(self, *a):
+            pass
+    s = HTTPServer(("0.0.0.0", port), H)
+    t = threading.Thread(target=s.serve_forever, daemon=True)
+    t.start()
+    print(f"Health server en puerto {port}")
+
 def main():
+    import sys
     token = cargar_token()
     if not token:
         print("ERROR: No se encuentra el token.")
         print("Crea un archivo 'bot_token.txt' o define la variable de entorno BOT_TOKEN.")
-        return
+        sys.exit(1)
 
-    print("Cargando datos...")
-    df = cargar_datos()
-    b1_a_fechas = construir_indices(df)
-    print(f"Registros: {len(df):,}")
+    iniciar_health_server()
+
+    print("Cargando datos...", flush=True)
+    try:
+        df = cargar_datos()
+        b1_a_fechas = construir_indices(df)
+        print(f"Registros: {len(df):,}", flush=True)
+    except Exception as e:
+        print(f"ERROR al cargar datos: {e}", flush=True)
+        sys.exit(1)
 
     app = Application.builder().token(token).build()
     app.bot_data["df"] = df
@@ -210,7 +234,7 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(conv)
-    print("Bot iniciado. Presiona Ctrl+C para detener.")
+    print("Bot iniciado.", flush=True)
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
