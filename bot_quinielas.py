@@ -106,8 +106,12 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return METHOD
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hasta luego.", reply_markup=KEYBOARD)
+    await update.message.reply_text("Menu principal:", reply_markup=KEYBOARD)
     return ConversationHandler.END
+
+async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Menu principal:", reply_markup=KEYBOARD)
+    return METHOD
 
 def formatear_prediccion(numeros, b1_a_fechas, df):
     contador, fechas, max_count, mejores_pales = predecir_b1(numeros, b1_a_fechas, df)
@@ -226,12 +230,12 @@ def main():
     app.bot_data["b1_a_fechas"] = b1_a_fechas
 
     conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command)],
+        entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancel)],
         states={
             METHOD: [CallbackQueryHandler(metodo_handler)],
             NUMBERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, numeros_handler)],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CommandHandler(["cancel", "cancelar"], cancel)],
     )
     app.add_handler(conv)
     print("Bot iniciado.", flush=True)
