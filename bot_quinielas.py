@@ -30,6 +30,7 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f50d Acompanantes B2/B3", callback_data="b2b3")],
     [InlineKeyboardButton("\U0001f41d Anguila", callback_data="anguila")],
 ])
+ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
 
 def cargar_token():
     import os
@@ -71,10 +72,13 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "anguila":
-        await query.edit_message_text("Ingresa los numeros B1 de Anguilla (ej: 12 45 83):")
+        await query.edit_message_text("Ingresa los numeros B1 de Anguilla (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
+    elif query.data == "atras":
+        await query.edit_message_text("Selecciona un metodo:", reply_markup=KEYBOARD)
+        return METHOD
     else:
-        await query.edit_message_text("Ingresa los numeros (0-99, ej: 12 45 83):")
+        await query.edit_message_text("Ingresa los numeros que han salido el dia de hoy (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
 
 async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -232,7 +236,7 @@ def main():
         entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancel)],
         states={
             METHOD: [CallbackQueryHandler(metodo_handler)],
-            NUMBERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, numeros_handler)],
+            NUMBERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, numeros_handler), CallbackQueryHandler(metodo_handler)],
         },
         fallbacks=[CommandHandler(["cancel", "cancelar"], cancel)],
     )
