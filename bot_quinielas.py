@@ -113,6 +113,8 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Menu principal:", reply_markup=KEYBOARD)
     return METHOD
 
+S = "│"
+
 def formatear_prediccion(numeros, b1_a_fechas, df):
     contador, fechas, max_count, mejores_pales = predecir_b1(numeros, b1_a_fechas, df)
     lineas = [f"\U0001f3b2 *Pool B1={numeros}*"]
@@ -122,15 +124,14 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
         lineas.append(f"Fechas: {fechas_str}")
     lineas.append("")
     if contador:
-        lineas.append(f"`{'#':<4}{'Frec':<6}{'%':<6}Mejor pale`")
+        lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
         lineas.append("`" + "-" * 30 + "`")
-        for num, count in contador.most_common(10):
-            pct = count / len(fechas) * 100
+        for i, (num, count) in enumerate(contador.most_common(10), 1):
             pal = ""
             if num in mejores_pales:
                 pn, pc = mejores_pales[num]
                 pal = f"+{pn}({pc})"
-            lineas.append(f"`{num:<4}{count:<6}{pct:.1f}% {pal:<10}`")
+            lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {pal:<10}`")
     else:
         lineas.append("Sin candidatos.")
     return "\n".join(lineas)
@@ -144,15 +145,14 @@ def formatear_b2b3(numeros, b1_a_fechas, df):
             lineas.append(f"  - {num}: {motivo}")
     lineas.append(f"Analizando {len(fechas)} fechas\n")
     if contador:
-        lineas.append(f"`{'#':<4}{'Frec':<6}{'%':<6}Mejor par`")
+        lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
         lineas.append("`" + "-" * 30 + "`")
-        for num, count in contador.most_common(10):
-            pct = count / len(fechas) * 100
+        for i, (num, count) in enumerate(contador.most_common(10), 1):
             par = ""
             if num in mejores_pares:
                 pn, pc = mejores_pares[num]
                 par = f"+{pn}({pc})"
-            lineas.append(f"`{num:<4}{count:<6}{pct:.1f}% {par:<10}`")
+            lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {par:<10}`")
     else:
         lineas.append("Sin acompanantes en B2/B3.")
     return "\n".join(lineas)
@@ -179,14 +179,13 @@ def formatear_anguila(numeros, df):
     lineas = [f"\U0001f41d *Anguila B1={numeros}*"]
     lineas.append(f"{len(match)} coincidencias en {len(fechas)} dias")
     lineas.append(f"Total sorteos: {len(rows)}\n")
-    lineas.append(f"`{'#':<4}{'Frec':<6}{'%':<6}Horarios`")
+    lineas.append(f"`# {S} NUM {S} FREC {S} HORARIOS`")
     lineas.append("`" + "-" * 35 + "`")
-    for num, count in contador.most_common(10):
-        pct = count / len(fechas) * 100
+    for i, (num, count) in enumerate(contador.most_common(10), 1):
         hrs = ", ".join(sorted(horarios_por_num[num])[:3])
         if len(horarios_por_num[num]) > 3:
             hrs += "..."
-        lineas.append(f"`{num:<4}{count:<6}{pct:.1f}% {hrs:<15}`")
+        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {hrs:<15}`")
     return "\n".join(lineas)
 
 def iniciar_health_server():
