@@ -25,10 +25,10 @@ logger = logging.getLogger(__name__)
 METHOD, NUMBERS = range(2)
 
 KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("\U0001f4e1 Automatico del dia", callback_data="auto")],
-    [InlineKeyboardButton("\U0001f3b2 Manual (pool de B1s)", callback_data="manual")],
-    [InlineKeyboardButton("\U0001f50d Acompanantes B2/B3", callback_data="b2b3")],
-    [InlineKeyboardButton("\U0001f41d Anguila", callback_data="anguila")],
+    [InlineKeyboardButton("\U0001f4e1 PREDICCION IA DEL DIA", callback_data="auto")],
+    [InlineKeyboardButton("\U0001f3b2 PREDICCION RESULTADOS EN PRIMERA", callback_data="manual")],
+    [InlineKeyboardButton("\U0001f50d IA DE ACOMPAÑANTES", callback_data="b2b3")],
+    [InlineKeyboardButton("\U0001f41d PREDICCION PARA ANGUILAS", callback_data="anguila")],
 ])
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
 
