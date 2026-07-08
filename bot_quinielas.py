@@ -78,7 +78,7 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Selecciona un metodo:", reply_markup=KEYBOARD)
         return METHOD
     else:
-        await query.edit_message_text("Ingresa los numeros que han salido el dia de hoy (ej: 12 45 83):", reply_markup=ATRAS)
+        await query.edit_message_text("Inserta los numeros que han salido en primera el dia de hoy (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
 
 async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
