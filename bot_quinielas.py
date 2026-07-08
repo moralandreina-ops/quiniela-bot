@@ -119,6 +119,12 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 S = "│"
 
+LOTERIAS_SUG = {
+    "auto": ["New Jersey Tarde", "Anguilla 12PM", "Anguilla 7PM", "La Primera Noche", "Anguilla 6PM"],
+    "b2b3": ["Anguilla 12PM", "Haiti Bolet 11:30 AM", "Loteka", "New Jersey Noche", "Anguilla 8AM"],
+    "anguila": ["Anguilla 10AM", "Anguilla 11AM", "Anguilla 10PM", "Anguilla 9AM", "Anguilla 2PM"],
+}
+
 def formatear_prediccion(numeros, b1_a_fechas, df):
     contador, fechas, max_count, mejores_pales = predecir_b1(numeros, b1_a_fechas, df)
     lineas = [f"\U0001f3b2 *Pool B1={numeros}*"]
@@ -136,6 +142,10 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
                 pn, pc = mejores_pales[num]
                 pal = f"+{pn}({pc})"
             lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {pal:<10}`")
+        lineas.append("")
+        lineas.append("*LOTERIAS SUGERIDAS:*")
+        for l in LOTERIAS_SUG["auto"]:
+            lineas.append(f"  \U0001f4cd {l}")
     else:
         lineas.append("Sin candidatos.")
     return "\n".join(lineas)
@@ -157,6 +167,10 @@ def formatear_b2b3(numeros, b1_a_fechas, df):
                 pn, pc = mejores_pares[num]
                 par = f"+{pn}({pc})"
             lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {par:<10}`")
+        lineas.append("")
+        lineas.append("*LOTERIAS SUGERIDAS:*")
+        for l in LOTERIAS_SUG["b2b3"]:
+            lineas.append(f"  \U0001f4cd {l}")
     else:
         lineas.append("Sin acompanantes en B2/B3.")
     return "\n".join(lineas)
@@ -190,6 +204,10 @@ def formatear_anguila(numeros, df):
         if len(horarios_por_num[num]) > 3:
             hrs += "..."
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {hrs:<15}`")
+    lineas.append("")
+    lineas.append("*LOTERIAS SUGERIDAS:*")
+    for l in LOTERIAS_SUG["anguila"]:
+        lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
 
 def iniciar_health_server():
