@@ -45,7 +45,7 @@ def cargar_token():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "\U0001f916 *Analizador de Quinielas*\n\nSelecciona un metodo:",
+        "\U0001f3b0 *HOLA PREPARADO PARA GANAR?*\nSelecciona un metodo:",
         reply_markup=KEYBOARD, parse_mode="Markdown"
     )
     return METHOD
@@ -233,7 +233,7 @@ def main():
     app.bot_data["b1_a_fechas"] = b1_a_fechas
 
     conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancel)],
+        entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
         states={
             METHOD: [CallbackQueryHandler(metodo_handler)],
             NUMBERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, numeros_handler), CallbackQueryHandler(metodo_handler)],
