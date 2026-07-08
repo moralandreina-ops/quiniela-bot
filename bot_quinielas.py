@@ -72,7 +72,7 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "anguila":
-        await query.edit_message_text("Ingresa los numeros B1 de Anguilla (ej: 12 45 83):", reply_markup=ATRAS)
+        await query.edit_message_text("INGRESA LOS NUMEROS QUE HAN SALIDO EN PRIMERA EN TODAS LAS ANGUILAS EL DIA DE HOY (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
     elif query.data == "atras":
         await query.edit_message_text("Selecciona un metodo:", reply_markup=KEYBOARD)
