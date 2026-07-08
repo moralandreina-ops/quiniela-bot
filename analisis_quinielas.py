@@ -7,7 +7,7 @@ from datetime import date
 import os
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-RUTA = os.environ.get("QUINIELA_RUTA") or os.path.join(_script_dir, "Resultados quinielas completo.xlsx")
+RUTA = os.path.join(_script_dir, "Resultados quinielas completo.xlsx")
 
 def inverso(n):
     return int(str(n).zfill(2)[::-1])
