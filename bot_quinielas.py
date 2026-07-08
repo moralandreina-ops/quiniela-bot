@@ -213,6 +213,8 @@ def formatear_anguila(numeros, df):
 def iniciar_health_server():
     import threading
     import os
+    import time
+    import urllib.request
     from http.server import HTTPServer, BaseHTTPRequestHandler
     port = int(os.environ.get("PORT", 10000))
     class H(BaseHTTPRequestHandler):
@@ -226,6 +228,14 @@ def iniciar_health_server():
     t = threading.Thread(target=s.serve_forever, daemon=True)
     t.start()
     print(f"Health server en puerto {port}")
+    def self_ping():
+        while True:
+            time.sleep(240)
+            try:
+                urllib.request.urlopen(f"http://localhost:{port}", timeout=5)
+            except:
+                pass
+    threading.Thread(target=self_ping, daemon=True).start()
 
 def main():
     import sys
