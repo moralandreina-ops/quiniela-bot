@@ -1,0 +1,10 @@
+# Token
+bot_token.txt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Excel temp files
+~$*.xlsx
