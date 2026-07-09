@@ -157,10 +157,9 @@ def jugar_auto(b1_a_fechas, df):
     print(f"B1s encontrados hoy ({len(pool)}): {pool}\n")
     mostrar_prediccion(pool, b1_a_fechas, df)
 
-def scrapear_hoy():
+def scrapear_fecha(fecha):
     import json
-    hoy = date.today()
-    fecha_str = hoy.strftime("%Y-%m-%d")
+    fecha_str = fecha.strftime("%Y-%m-%d")
     url = f"https://enloteria.com/resultados-loterias-{fecha_str}"
     print(f"Scrapeando {url} ...")
     try:
@@ -197,11 +196,31 @@ def scrapear_hoy():
         inicio = ev.get("startDate", "")
         loterias.append((nombre, inicio, b1))
     if not loterias:
-        print("No se encontraron sorteos realizados hoy.")
+        print(f"No se encontraron sorteos en {fecha_str}.")
         return []
     loterias.sort(key=lambda x: x[1])
     print(f"Encontrados {len(loterias)} sorteos: {[b1 for _, _, b1 in loterias]}")
     return [b1 for _, _, b1 in loterias]
+
+def scrapear_hoy():
+    return scrapear_fecha(date.today())
+
+def analizar_decenas(numeros):
+    decenas = {}
+    conjunto = set(numeros)
+    for d in range(10):
+        inicio = d * 10
+        fin = inicio + 9
+        salieron = sorted([n for n in numeros if inicio <= n <= fin])
+        faltaron = sorted([n for n in range(inicio, fin + 1) if n not in conjunto])
+        inversos = {}
+        for n in faltaron:
+            inv = inverso(n)
+            if inv in conjunto:
+                inversos[n] = inv
+        if salieron or inversos:
+            decenas[d] = {"rango": f"{inicio:02d}-{fin}", "salieron": salieron, "faltaron": faltaron, "inversos": inversos}
+    return decenas
 
 def jugar_anguila(df):
     print("=== METODO ANGUILA ===")
@@ -270,6 +289,61 @@ def mostrar_prediccion(numeros, b1_a_fechas, df):
     else:
         print("Sin candidatos.")
     print()
+
+def obtener_calientes(df, top_n=10):
+    b1_counts = df["b1"].value_counts()
+    total = b1_counts.sum()
+    hot = [(int(num), int(count), count / total * 100) for num, count in b1_counts.head(top_n).items()]
+    cold = [(int(num), int(count), count / total * 100) for num, count in b1_counts.tail(top_n).items()]
+    return hot, cold, total
+
+def pares_frecuentes(df, top_n=10):
+    b1_b2 = df.groupby(["b1", "b2"]).size().reset_index(name="freq").sort_values("freq", ascending=False).head(top_n)
+    b1_b3 = df.groupby(["b1", "b3"]).size().reset_index(name="freq").sort_values("freq", ascending=False).head(top_n)
+    b1_b2_pairs = [(int(r["b1"]), int(r["b2"]), int(r["freq"])) for _, r in b1_b2.iterrows()]
+    b1_b3_pairs = [(int(r["b1"]), int(r["b3"]), int(r["freq"])) for _, r in b1_b3.iterrows()]
+    return b1_b2_pairs, b1_b3_pairs
+
+def cargar_secuencias(ruta):
+    secuencias = []
+    with open(ruta, encoding="utf-8") as f:
+        for linea in f:
+            linea = linea.strip()
+            if not linea:
+                continue
+            nums = []
+            for tok in linea.split("-"):
+                tok = tok.strip()
+                if tok == "" or not tok.isdigit():
+                    continue
+                nums.append(int(tok))
+            if nums:
+                secuencias.append(nums)
+    return secuencias
+
+def analizar_secuencias(secuencias, resultados):
+    res_set = set(resultados)
+    for n in resultados:
+        res_set.add(inverso(n))
+    resultados_por_secuencia = []
+    for idx, seq in enumerate(secuencias):
+        acertados = []
+        faltantes = []
+        for n in seq:
+            if n in res_set or inverso(n) in res_set:
+                acertados.append(n)
+            else:
+                faltantes.append(n)
+        resultados_por_secuencia.append({
+            "id": idx,
+            "secuencia": seq,
+            "num_acertados": len(acertados),
+            "total": len(seq),
+            "acertados": acertados,
+            "faltantes": faltantes,
+        })
+    resultados_por_secuencia.sort(key=lambda x: (-x["num_acertados"], x["total"]))
+    return resultados_por_secuencia
 
 def menu():
     print("\nSelecciona metodo:")

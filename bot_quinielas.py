@@ -11,16 +11,21 @@ Uso:
 import logging
 import asyncio
 from collections import Counter, defaultdict
+from datetime import date, timedelta
 from io import StringIO
+import os
 import sys
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, obtener_calientes, pares_frecuentes, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+RUTA_SECUENCIAS = os.path.join(_script_dir, "03-10-25-05-66-00.txt")
 
 METHOD, NUMBERS = range(2)
 
@@ -29,6 +34,10 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f3b2 PREDICCION RESULTADOS EN PRIMERA", callback_data="manual")],
     [InlineKeyboardButton("\U0001f50d IA DE ACOMPAÑANTES", callback_data="b2b3")],
     [InlineKeyboardButton("\U0001f41d PREDICCION PARA ANGUILAS", callback_data="anguila")],
+    [InlineKeyboardButton("\U0001f4c5 ANALISIS DIA ANTERIOR", callback_data="decenas")],
+    [InlineKeyboardButton("\U0001f525 NUMEROS CALIENTES", callback_data="calientes")],
+    [InlineKeyboardButton("\U0001f4ca PARES FRECUENTES", callback_data="pares")],
+    [InlineKeyboardButton("\U0001f3af SECUENCIAS", callback_data="secuencias")],
 ])
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
 
@@ -69,6 +78,44 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         df = context.bot_data["df"]
         b1_a_fechas = context.bot_data["b1_a_fechas"]
         texto = formatear_prediccion(pool, b1_a_fechas, df)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "decenas":
+        ayer = date.today() - timedelta(days=1)
+        await query.edit_message_text(f"\U0001f4c5 Buscando resultados de {ayer}...")
+        pool = await asyncio.to_thread(scrapear_fecha, ayer)
+        if not pool:
+            await query.edit_message_text(f"No se encontraron resultados de {ayer}.\n\nIntenta con otro metodo.", reply_markup=KEYBOARD)
+            return METHOD
+        texto = formatear_decenas(pool)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "calientes":
+        df = context.bot_data["df"]
+        texto = formatear_calientes(df)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "pares":
+        df = context.bot_data["df"]
+        texto = formatear_pares(df)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "secuencias":
+        await query.edit_message_text("\U0001f3af Buscando resultados de ayer y hoy...")
+        ayer = date.today() - timedelta(days=1)
+        pool_ayer = await asyncio.to_thread(scrapear_fecha, ayer)
+        pool_hoy = await asyncio.to_thread(scrapear_hoy)
+        resultados = list(set(pool_ayer + pool_hoy))
+        if not resultados:
+            await query.edit_message_text("No se pudieron obtener resultados.\n\nIntenta mas tarde.", reply_markup=KEYBOARD)
+            return METHOD
+        try:
+            secuencias = await asyncio.to_thread(cargar_secuencias, RUTA_SECUENCIAS)
+        except Exception as e:
+            await query.edit_message_text(f"Error al cargar secuencias: {e}", reply_markup=KEYBOARD)
+            return METHOD
+        analisis = analizar_secuencias(secuencias, resultados)
+        texto = formatear_secuencias(analisis, resultados)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "anguila":
@@ -123,6 +170,10 @@ LOTERIAS_SUG = {
     "auto": ["New Jersey Tarde", "Anguilla 12PM", "Anguilla 7PM", "La Primera Noche", "Anguilla 6PM"],
     "b2b3": ["Anguilla 12PM", "Haiti Bolet 11:30 AM", "Loteka", "New Jersey Noche", "Anguilla 8AM"],
     "anguila": ["Anguilla 10AM", "Anguilla 11AM", "Anguilla 10PM", "Anguilla 9AM", "Anguilla 2PM"],
+    "decenas": ["New Jersey Tarde", "La Primera Noche", "Loteka", "Anguilla 7PM", "Haiti Bolet 11:30 AM"],
+    "calientes": ["New Jersey Tarde", "La Primera Noche", "Anguilla 7PM", "Loteka", "Anguilla 6PM"],
+    "pares": ["Anguilla 12PM", "New Jersey Noche", "La Primera Noche", "Anguilla 7PM", "Haiti Bolet 11:30 AM"],
+    "secuencias": ["New Jersey Tarde", "Anguilla 7PM", "La Primera Noche", "Loteka", "Anguilla 6PM"],
 }
 
 def formatear_prediccion(numeros, b1_a_fechas, df):
@@ -207,6 +258,93 @@ def formatear_anguila(numeros, df):
     lineas.append("")
     lineas.append("*LOTERIAS SUGERIDAS:*")
     for l in LOTERIAS_SUG["anguila"]:
+        lineas.append(f"  \U0001f4cd {l}")
+    return "\n".join(lineas)
+
+def formatear_decenas(numeros):
+    decenas = analizar_decenas(numeros)
+    lineas = [f"\U0001f4c5 *ANALISIS POR DECENAS*"]
+    lineas.append(f"B1s del dia: {sorted(numeros)}\n")
+    for d in range(10):
+        inicio = d * 10
+        data = decenas.get(d)
+        if not data:
+            continue
+        lineas.append(f"*DECENA {data['rango']}*")
+        if data["salieron"]:
+            lineas.append(f"  Salieron: {', '.join(f'{n:02d}' for n in data['salieron'])}")
+        faltaron_con_inv = [n for n in data["faltaron"] if n in data["inversos"]]
+        faltaron_sin_inv = [n for n in data["faltaron"] if n not in data["inversos"]]
+        if faltaron_con_inv:
+            for n in faltaron_con_inv:
+                inv = data["inversos"][n]
+                lineas.append(f"  \U0000274c {n:02d} <- salio como {inv:02d}")
+        if faltaron_sin_inv:
+            falt_str = ", ".join(f"{n:02d}" for n in faltaron_sin_inv)
+            lineas.append(f"  \U0000274c Faltaron: {falt_str}")
+        lineas.append("")
+    lineas.append("*LOTERIAS SUGERIDAS:*")
+    for l in LOTERIAS_SUG["decenas"]:
+        lineas.append(f"  \U0001f4cd {l}")
+    return "\n".join(lineas)
+
+def formatear_calientes(df):
+    hot, cold, total = obtener_calientes(df)
+    lineas = ["\U0001f525 *NUMEROS CALIENTES*"]
+    lineas.append(f"Total de sorteos: {total:,}\n")
+    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
+    lineas.append("`" + "-" * 25 + "`")
+    for i, (num, count, pct) in enumerate(hot, 1):
+        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.1f}%`")
+    lineas.append("")
+    lineas.append("\U0001f4ca *NUMEROS FRIOS*")
+    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
+    lineas.append("`" + "-" * 25 + "`")
+    for i, (num, count, pct) in enumerate(cold, 1):
+        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.1f}%`")
+    lineas.append("")
+    lineas.append("*LOTERIAS SUGERIDAS:*")
+    for l in LOTERIAS_SUG["calientes"]:
+        lineas.append(f"  \U0001f4cd {l}")
+    return "\n".join(lineas)
+
+def formatear_pares(df):
+    b1_b2, b1_b3 = pares_frecuentes(df)
+    lineas = ["\U0001f4ca *PARES FRECUENTES*"]
+    lineas.append(f"\n`B1-B2{' ' * 16}FREC`")
+    lineas.append("`" + "-" * 28 + "`")
+    for i, (b1, b2, freq) in enumerate(b1_b2, 1):
+        lineas.append(f"`{i:<2}{S} {b1:02d}-{b2:02d}{' ' * 11}{S} {freq:<4}`")
+    lineas.append(f"\n`B1-B3{' ' * 16}FREC`")
+    lineas.append("`" + "-" * 28 + "`")
+    for i, (b1, b3, freq) in enumerate(b1_b3, 1):
+        lineas.append(f"`{i:<2}{S} {b1:02d}-{b3:02d}{' ' * 11}{S} {freq:<4}`")
+    lineas.append("")
+    lineas.append("*LOTERIAS SUGERIDAS:*")
+    for l in LOTERIAS_SUG["pares"]:
+        lineas.append(f"  \U0001f4cd {l}")
+    return "\n".join(lineas)
+
+def formatear_secuencias(analisis, resultados):
+    lineas = ["\U0001f3af *SECUENCIAS - TOP MATCHES*"]
+    lineas.append(f"Resultados: {sorted(resultados)}\n")
+    top = analisis[:5]
+    for item in top:
+        seq = item["secuencia"]
+        aciertos = item["acertados"]
+        faltan = item["faltantes"]
+        seq_str = "-".join(f"{n:02d}" for n in seq)
+        pct = int(item["num_acertados"] / item["total"] * 100) if item["total"] else 0
+        barra = "\u2588" * (pct // 10) + "\u2591" * (10 - pct // 10) if pct else "\u2591" * 10
+        lineas.append(f"`{seq_str}`")
+        lineas.append(f"  {item['num_acertados']}/{item['total']} ({pct}%) {barra}")
+        if aciertos:
+            lineas.append(f"  \u2705 {', '.join(f'{n:02d}' for n in aciertos)}")
+        if faltan:
+            lineas.append(f"  \U0001f53a *FALTAN:* {', '.join(f'{n:02d}' for n in faltan)}")
+        lineas.append("")
+    lineas.append("*LOTERIAS SUGERIDAS:*")
+    for l in LOTERIAS_SUG.get("secuencias", LOTERIAS_SUG["auto"]):
         lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
 
