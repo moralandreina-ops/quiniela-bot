@@ -188,15 +188,21 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
         lineas.append(f"Fechas: {fechas_str}")
     lineas.append("")
     if contador:
-        lineas.append(f"`# {S}   {S} NUM {S} FREC {S} ACOMP`")
-        lineas.append("`" + "-" * 36 + "`")
-        for i, (num, count) in enumerate(contador.most_common(10), 1):
-            hoy = "\u2705" if num in hoy_set else "  "
+        lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
+        lineas.append("`" + "-" * 30 + "`")
+        vistos = set()
+        for num_orig, count in contador.most_common(20):
+            num = inverso(num_orig) if num_orig in hoy_set else num_orig
+            if num in vistos or num in hoy_set:
+                continue
+            vistos.add(num)
             pal = ""
-            if num in mejores_pales:
-                pn, pc = mejores_pales[num]
+            if num_orig in mejores_pales:
+                pn, pc = mejores_pales[num_orig]
                 pal = f"+{pn}({pc})"
-            lineas.append(f"`{i:<2}{S} {hoy}{S} {num:<2} {S} {count:<3} {S} {pal:<10}`")
+            lineas.append(f"`{len(vistos):<2}{S} {num:<2} {S} {count:<3} {S} {pal:<10}`")
+            if len(vistos) >= 10:
+                break
         lineas.append("")
         lineas.append("*LOTERIAS SUGERIDAS:*")
         for l in LOTERIAS_SUG["auto"]:
