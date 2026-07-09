@@ -228,11 +228,15 @@ def iniciar_health_server():
     t = threading.Thread(target=s.serve_forever, daemon=True)
     t.start()
     print(f"Health server en puerto {port}")
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
     def self_ping():
         while True:
-            time.sleep(240)
+            time.sleep(300)
             try:
-                urllib.request.urlopen(f"http://localhost:{port}", timeout=5)
+                if render_url:
+                    urllib.request.urlopen(render_url, timeout=10)
+                else:
+                    urllib.request.urlopen(f"http://localhost:{port}", timeout=5)
             except:
                 pass
     threading.Thread(target=self_ping, daemon=True).start()
