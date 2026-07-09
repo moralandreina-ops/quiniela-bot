@@ -92,7 +92,12 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return METHOD
     elif query.data == "calientes":
         df = context.bot_data["df"]
-        texto = formatear_calientes(df)
+        desde = date.today() - timedelta(days=7)
+        try:
+            df_filtrado = df[df["fecha"] >= desde]
+        except Exception:
+            df_filtrado = df
+        texto = formatear_calientes(df_filtrado)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "pares":
