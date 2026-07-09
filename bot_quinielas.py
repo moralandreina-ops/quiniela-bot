@@ -91,9 +91,13 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "calientes":
+        await query.edit_message_text("\U0001f525 Analizando ultimos 7 dias...")
         df = context.bot_data["df"]
         desde = date.today() - timedelta(days=7)
         df_reciente = df[df["fecha"] >= desde]
+        if df_reciente.empty:
+            await query.edit_message_text("No hay datos de la ultima semana.\n\nIntenta con otro metodo.", reply_markup=KEYBOARD)
+            return METHOD
         texto = formatear_calientes(df_reciente)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
