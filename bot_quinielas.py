@@ -180,6 +180,9 @@ LOTERIAS_SUG = {
 
 def formatear_prediccion(numeros, b1_a_fechas, df):
     contador, fechas, max_count, mejores_pales = predecir_b1(numeros, b1_a_fechas, df)
+    hoy_set = set(numeros)
+    for n in numeros:
+        hoy_set.add(inverso(n))
     lineas = [f"\U0001f3b2 *Pool B1={numeros}*"]
     lineas.append(f"Fecha(s) con max coincidencias: {len(fechas)} | {max_count}/{len(numeros)}")
     if fechas:
@@ -187,14 +190,15 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
         lineas.append(f"Fechas: {fechas_str}")
     lineas.append("")
     if contador:
-        lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
-        lineas.append("`" + "-" * 30 + "`")
+        lineas.append(f"`# {S}   {S} NUM {S} FREC {S} ACOMP`")
+        lineas.append("`" + "-" * 36 + "`")
         for i, (num, count) in enumerate(contador.most_common(10), 1):
+            hoy = "\u2705" if num in hoy_set else "  "
             pal = ""
             if num in mejores_pales:
                 pn, pc = mejores_pales[num]
                 pal = f"+{pn}({pc})"
-            lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {pal:<10}`")
+            lineas.append(f"`{i:<2}{S} {hoy}{S} {num:<2} {S} {count:<3} {S} {pal:<10}`")
         lineas.append("")
         lineas.append("*LOTERIAS SUGERIDAS:*")
         for l in LOTERIAS_SUG["auto"]:

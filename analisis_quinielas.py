@@ -86,10 +86,9 @@ def predecir_b1(pool, b1_a_fechas, df):
     pale = defaultdict(Counter)
     for _, row in rows.iterrows():
         b1 = row["b1"]
-        if b1 not in pool_con_inv:
-            contador[b1] += 1
-            pale[b1][row["b2"]] += 1
-            pale[b1][row["b3"]] += 1
+        contador[b1] += 1
+        pale[b1][row["b2"]] += 1
+        pale[b1][row["b3"]] += 1
     mejores_pales = {}
     for b1, pc in pale.items():
         if pc:
