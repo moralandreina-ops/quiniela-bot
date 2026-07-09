@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, obtener_calientes, pares_frecuentes, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, numeros_atrasados, predecir_anguila_siguiente, anguila_horarios_ordenados
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, obtener_calientes, pares_frecuentes, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, numeros_atrasados, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -175,7 +175,9 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             hora = m.group(2).strip().replace(" ", "")
             if hora in [str(h) for h in range(1, 13)]:
                 hora += "AM" if int(hora) < 12 else "PM"
-            contador, sig_tag, total = predecir_anguila_siguiente(b1, hora, df)
+            cache = context.bot_data.get("anguila_cache", {})
+            dias_cache = context.bot_data.get("anguila_cache_dias", {})
+            contador, sig_tag, total = predecir_anguila_siguiente(b1, hora, df, cache, dias_cache)
             texto = formatear_anguila_seq(b1, hora, contador, sig_tag, total)
         else:
             texto = "Formato invalido. Usa: numero hora (ej: 45 8AM)"
@@ -478,6 +480,9 @@ def main():
         df = cargar_datos()
         b1_a_fechas = construir_indices(df)
         print(f"Registros: {len(df):,}", flush=True)
+        print("Precomputando cache Anguila...", flush=True)
+        ang_cache, ang_dias = precomputar_cache_anguila(df)
+        print(f"Cache Anguila: {len(ang_cache)} entradas", flush=True)
     except Exception as e:
         print(f"ERROR al cargar datos: {e}", flush=True)
         sys.exit(1)
@@ -485,6 +490,8 @@ def main():
     app = Application.builder().token(token).build()
     app.bot_data["df"] = df
     app.bot_data["b1_a_fechas"] = b1_a_fechas
+    app.bot_data["anguila_cache"] = ang_cache
+    app.bot_data["anguila_cache_dias"] = ang_dias
 
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],

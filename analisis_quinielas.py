@@ -367,8 +367,44 @@ def _hora_a_24h(tag):
         h = 0
     return h
 
-def predecir_anguila_siguiente(b1_actual, horario_tag, df):
-    """Dado un B1 de Anguilla a una hora, predice B1 de la hora siguiente."""
+def precomputar_cache_anguila(df):
+    ang = df[df["loteria"].str.contains("Anguilla", case=False, na=False)].copy()
+    if ang.empty:
+        return {}, {}
+    ang["norm"] = ang["loteria"].apply(normalizar_loteria)
+
+    horarios = anguila_horarios_ordenados()
+    tag_fecha_b1 = defaultdict(dict)
+    for _, row in ang.iterrows():
+        for t in horarios:
+            if row["norm"].endswith(t):
+                tag_fecha_b1[t][row["fecha"]] = int(row["b1"])
+                break
+
+    cache = {}
+    dias_cache = {}
+    for tag in horarios[:-1]:
+        sig_tag = horarios[horarios.index(tag) + 1]
+        sig_fecha_b1 = tag_fecha_b1.get(sig_tag, {})
+
+        for n in range(100):
+            pool = {n, inverso(n)}
+            fechas = {f for f, b in tag_fecha_b1[tag].items() if b in pool}
+            if not fechas:
+                continue
+
+            counter = Counter()
+            for f in fechas:
+                if f in sig_fecha_b1:
+                    counter[sig_fecha_b1[f]] += 1
+
+            if counter:
+                cache[(tag, n)] = counter
+                dias_cache[(tag, n)] = len(fechas)
+
+    return cache, dias_cache
+
+def predecir_anguila_siguiente(b1_actual, horario_tag, df, cache=None, dias_cache=None):
     h_actual = _hora_a_24h(horario_tag)
     if h_actual is None or h_actual >= 22:
         return None, None, 0
@@ -378,6 +414,15 @@ def predecir_anguila_siguiente(b1_actual, horario_tag, df):
     if not sig_tag:
         return None, None, 0
     sig_tag = sig_tag[0]
+
+    if cache is not None:
+        key = (horario_tag, b1_actual)
+        if key not in cache:
+            key = (horario_tag, inverso(b1_actual))
+            if key not in cache:
+                return None, sig_tag, 0
+        total_dias = dias_cache.get(key, max(sum(cache[key].values()), 1)) if dias_cache else max(sum(cache[key].values()), 1)
+        return cache[key], sig_tag, total_dias
 
     ang_norm = df[df["loteria"].str.contains("Anguilla", case=False, na=False)].copy()
     if ang_norm.empty:
