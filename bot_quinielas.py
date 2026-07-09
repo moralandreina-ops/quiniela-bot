@@ -19,7 +19,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, obtener_calientes, pares_frecuentes, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, obtener_calientes, pares_frecuentes, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, numeros_atrasados
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f525 NUMEROS CALIENTES", callback_data="calientes")],
     [InlineKeyboardButton("\U0001f4ca PARES FRECUENTES", callback_data="pares")],
     [InlineKeyboardButton("\U0001f3af SECUENCIAS", callback_data="secuencias")],
+    [InlineKeyboardButton("\U0001f504 ATRASADOS POR SEMANA", callback_data="atrasados")],
 ])
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
 
@@ -123,6 +124,13 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = formatear_secuencias(analisis, resultados)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
+    elif query.data == "atrasados":
+        await query.edit_message_text("\U0001f504 Buscando numeros atrasados 7 dias...")
+        df = context.bot_data["df"]
+        atrasados, salidos, total = numeros_atrasados(df)
+        texto = formatear_atrasados(atrasados, salidos, total)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
     elif query.data == "b2b3":
         await query.edit_message_text("\U0001f50d Buscando ultimo B1 del dia...")
         pool = await asyncio.to_thread(scrapear_hoy)
@@ -191,6 +199,7 @@ LOTERIAS_SUG = {
     "calientes": ["New Jersey Tarde", "La Primera Noche", "Anguilla 7PM", "Loteka", "Anguilla 6PM"],
     "pares": ["Anguilla 12PM", "New Jersey Noche", "La Primera Noche", "Anguilla 7PM", "Haiti Bolet 11:30 AM"],
     "secuencias": ["New Jersey Tarde", "Anguilla 7PM", "La Primera Noche", "Loteka", "Anguilla 6PM"],
+    "atrasados": ["New Jersey Tarde", "La Primera Noche", "Anguilla 7PM", "Loteka", "Anguilla 6PM"],
 }
 
 def formatear_prediccion(numeros, b1_a_fechas, df):
@@ -364,6 +373,26 @@ def formatear_secuencias(analisis, resultados):
             lineas.append("")
     lineas.append("*LOTERIAS SUGERIDAS:*")
     for l in LOTERIAS_SUG.get("secuencias", LOTERIAS_SUG["auto"]):
+        lineas.append(f"  \U0001f4cd {l}")
+    return "\n".join(lineas)
+
+def formatear_atrasados(atrasados, salidos, total):
+    decenas = defaultdict(list)
+    for n in atrasados:
+        d = n // 10
+        decenas[d].append(n)
+    lineas = ["\U0001f504 *ATRASADOS POR SEMANA*"]
+    lineas.append(f"Total sorteos 7d: {total} | Salieron: {salidos} | Atrasados: {len(atrasados)}\n")
+    for d in range(10):
+        nums = decenas.get(d, [])
+        if not nums:
+            continue
+        inicio = d * 10
+        fin = inicio + 9
+        lineas.append(f"`{inicio:02d}-{fin}: {', '.join(f'{n:02d}' for n in nums)}`")
+    lineas.append("")
+    lineas.append("*LOTERIAS SUGERIDAS:*")
+    for l in LOTERIAS_SUG["atrasados"]:
         lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
 

@@ -344,6 +344,13 @@ def analizar_secuencias(secuencias, resultados):
     resultados_por_secuencia.sort(key=lambda x: (-x["num_acertados"], x["total"]))
     return resultados_por_secuencia
 
+def numeros_atrasados(df, dias=7):
+    desde = date.today() - timedelta(days=dias)
+    df_filtrado = df[df["fecha"] >= desde]
+    salidos = set(df_filtrado["b1"].dropna().astype(int))
+    atrasados = [n for n in range(100) if n not in salidos]
+    return atrasados, len(salidos), len(df_filtrado)
+
 def menu():
     print("\nSelecciona metodo:")
     print("  1 - Automatico del dia (scrapea + predice)")
