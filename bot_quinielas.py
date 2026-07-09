@@ -123,6 +123,18 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = formatear_secuencias(analisis, resultados)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
+    elif query.data == "b2b3":
+        await query.edit_message_text("\U0001f50d Buscando ultimo B1 del dia...")
+        pool = await asyncio.to_thread(scrapear_hoy)
+        if pool:
+            ultimo = [pool[-1]]
+            df = context.bot_data["df"]
+            b1_a_fechas = context.bot_data["b1_a_fechas"]
+            texto = formatear_b2b3(ultimo, b1_a_fechas, df)
+            await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+            return METHOD
+        await query.edit_message_text("No se pudieron obtener resultados.\n\nInserta los numeros manualmente (ej: 12 45 83):", reply_markup=ATRAS)
+        return NUMBERS
     elif query.data == "anguila":
         await query.edit_message_text("INGRESA LOS NUMEROS QUE HAN SALIDO EN PRIMERA EN TODAS LAS ANGUILAS EL DIA DE HOY (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
