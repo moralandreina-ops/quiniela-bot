@@ -267,10 +267,10 @@ def main():
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
         states={
-            METHOD: [CallbackQueryHandler(metodo_handler)],
+            METHOD: [CallbackQueryHandler(metodo_handler), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
             NUMBERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, numeros_handler), CallbackQueryHandler(metodo_handler)],
         },
-        fallbacks=[CommandHandler(["cancel", "cancelar"], cancel)],
+        fallbacks=[CommandHandler(["cancel", "cancelar"], cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
     )
     app.add_handler(conv)
     print("Bot iniciado.", flush=True)
