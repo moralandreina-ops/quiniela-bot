@@ -10,6 +10,7 @@ Uso:
 
 import logging
 import asyncio
+import re
 from collections import Counter, defaultdict
 from datetime import date, timedelta
 from io import StringIO
@@ -19,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, obtener_calientes, pares_frecuentes, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, numeros_atrasados
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, obtener_calientes, pares_frecuentes, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, numeros_atrasados, predecir_anguila_siguiente, anguila_horarios_ordenados
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,11 +31,11 @@ RUTA_SECUENCIAS = os.path.join(_script_dir, "03-10-25-05-66-00.txt")
 METHOD, NUMBERS = range(2)
 
 KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("\U0001f4e1 PREDICCION IA DEL DIA", callback_data="auto")],
-    [InlineKeyboardButton("\U0001f3b2 PREDICCION RESULTADOS EN PRIMERA", callback_data="manual")],
+    [InlineKeyboardButton("\U0001f4e1 PREDICCION AUTO", callback_data="auto")],
+    [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
     [InlineKeyboardButton("\U0001f50d IA ACOMPAÑANTES AUTO", callback_data="b2b3auto")],
     [InlineKeyboardButton("\U0001f511 IA ACOMPAÑANTES MANUAL", callback_data="b2b3manual")],
-    [InlineKeyboardButton("\U0001f41d PREDICCION PARA ANGUILAS", callback_data="anguila")],
+    [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
     [InlineKeyboardButton("\U0001f4c5 ANALISIS DIA ANTERIOR", callback_data="decenas")],
     [InlineKeyboardButton("\U0001f525 NUMEROS CALIENTES", callback_data="calientes")],
     [InlineKeyboardButton("\U0001f4ca PARES FRECUENTES", callback_data="pares")],
@@ -148,7 +149,11 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Inserta los numeros B1 del dia separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
     elif query.data == "anguila":
-        await query.edit_message_text("INGRESA LOS NUMEROS QUE HAN SALIDO EN PRIMERA EN TODAS LAS ANGUILAS EL DIA DE HOY (ej: 12 45 83):", reply_markup=ATRAS)
+        horas = ", ".join(anguila_horarios_ordenados())
+        await query.edit_message_text(f"Ingresa el numero B1 de Anguilla y la hora (ej: 45 8AM):\n\nHorarios: {horas}", reply_markup=ATRAS)
+        return NUMBERS
+    elif query.data == "manual":
+        await query.edit_message_text("Inserta los numeros que han salido hoy separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
     elif query.data == "atras":
         await query.edit_message_text("Selecciona un metodo:", reply_markup=KEYBOARD)
@@ -158,8 +163,26 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NUMBERS
 
 async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto = update.message.text.strip()
-    entrada = texto.replace(",", " ").replace("-", " ")
+    raw = update.message.text.strip()
+    metodo = context.user_data.get("metodo")
+    df = context.bot_data["df"]
+    b1_a_fechas = context.bot_data["b1_a_fechas"]
+
+    if metodo == "anguila":
+        m = re.match(r"(\d+)\s*(.*)", raw.upper().strip())
+        if m:
+            b1 = int(m.group(1))
+            hora = m.group(2).strip().replace(" ", "")
+            if hora in [str(h) for h in range(1, 13)]:
+                hora += "AM" if int(hora) < 12 else "PM"
+            contador, sig_tag, total = predecir_anguila_siguiente(b1, hora, df)
+            texto = formatear_anguila_seq(b1, hora, contador, sig_tag, total)
+        else:
+            texto = "Formato invalido. Usa: numero hora (ej: 45 8AM)"
+        await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+
+    entrada = raw.replace(",", " ").replace("-", " ")
     try:
         numeros = sorted({int(x) for x in entrada.split()})
         if not all(0 <= n <= 99 for n in numeros):
@@ -169,16 +192,10 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Entrada invalida. Solo numeros separados por espacio (ej: 12 45 83):")
         return NUMBERS
 
-    metodo = context.user_data.get("metodo")
-    df = context.bot_data["df"]
-    b1_a_fechas = context.bot_data["b1_a_fechas"]
-
     if metodo == "manual":
         texto = formatear_prediccion(numeros, b1_a_fechas, df)
     elif metodo == "b2b3manual":
         texto = formatear_b2b3(numeros, b1_a_fechas, df)
-    elif metodo == "anguila":
-        texto = formatear_anguila(numeros, df)
     else:
         texto = "Metodo no reconocido."
 
@@ -299,6 +316,21 @@ def formatear_anguila(numeros, df):
     lineas.append("*LOTERIAS SUGERIDAS:*")
     for l in LOTERIAS_SUG["anguila"]:
         lineas.append(f"  \U0001f4cd {l}")
+    return "\n".join(lineas)
+
+def formatear_anguila_seq(b1, hora, contador, sig_tag, total_dias):
+    if contador is None:
+        return f"No hay suficientes datos para {b1:02d} a las {hora}.\n\n*Horarios:* {', '.join(anguila_horarios_ordenados())}"
+    if not contador:
+        return f"El numero {b1:02d} a las {hora} nunca se repitio en la hora siguiente ({sig_tag}) en {total_dias} dias."
+    lineas = [f"\U0001f41d *Anguila {hora} -> {sig_tag}*"]
+    lineas.append(f"B1={b1:02d} | {total_dias} dias historicos con esta secuencia")
+    lineas.append(f"")
+    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
+    lineas.append("`" + "-" * 25 + "`")
+    for i, (num, count) in enumerate(contador.most_common(10), 1):
+        pct = count / total_dias * 100
+        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
     return "\n".join(lineas)
 
 def formatear_decenas(numeros):

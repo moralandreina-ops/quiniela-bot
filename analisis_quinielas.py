@@ -3,7 +3,6 @@ from collections import Counter, defaultdict
 import requests
 import re
 from datetime import date, timedelta
-
 import os
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -350,6 +349,53 @@ def numeros_atrasados(df, dias=7):
     salidos = set(df_filtrado["b1"].dropna().astype(int))
     atrasados = [n for n in range(100) if n not in salidos]
     return atrasados, len(salidos), len(df_filtrado)
+
+def normalizar_loteria(nombre):
+    return re.sub(r"(\d)\s+(AM|PM)", r"\1\2", nombre, flags=re.IGNORECASE)
+
+def anguila_horarios_ordenados():
+    return ["8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM", "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM"]
+
+def _hora_a_24h(tag):
+    m = re.match(r"(\d+)(AM|PM)", tag.strip(), re.IGNORECASE)
+    if not m:
+        return None
+    h = int(m.group(1))
+    if m.group(2).upper() == "PM" and h != 12:
+        h += 12
+    if m.group(2).upper() == "AM" and h == 12:
+        h = 0
+    return h
+
+def predecir_anguila_siguiente(b1_actual, horario_tag, df):
+    """Dado un B1 de Anguilla a una hora, predice B1 de la hora siguiente."""
+    h_actual = _hora_a_24h(horario_tag)
+    if h_actual is None or h_actual >= 22:
+        return None, None, 0
+    h_sig = h_actual + 1
+    horarios = anguila_horarios_ordenados()
+    sig_tag = [t for t in horarios if _hora_a_24h(t) == h_sig]
+    if not sig_tag:
+        return None, None, 0
+    sig_tag = sig_tag[0]
+
+    ang_norm = df[df["loteria"].str.contains("Anguilla", case=False, na=False)].copy()
+    if ang_norm.empty:
+        return None, None, 0
+    ang_norm["norm"] = ang_norm["loteria"].apply(normalizar_loteria)
+
+    pool = {b1_actual, inverso(b1_actual)}
+    curr = ang_norm[ang_norm["norm"].str.endswith(horario_tag, na=False) & ang_norm["b1"].isin(pool)]
+    if curr.empty:
+        return None, None, 0
+
+    fechas = set(curr["fecha"])
+    sig = ang_norm[ang_norm["norm"].str.endswith(sig_tag, na=False) & ang_norm["fecha"].isin(fechas)]
+    if sig.empty:
+        return None, sig_tag, 0
+
+    contador = Counter(int(b1) for b1 in sig["b1"])
+    return contador, sig_tag, len(fechas)
 
 def menu():
     print("\nSelecciona metodo:")
