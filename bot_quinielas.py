@@ -32,7 +32,8 @@ METHOD, NUMBERS = range(2)
 KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f4e1 PREDICCION IA DEL DIA", callback_data="auto")],
     [InlineKeyboardButton("\U0001f3b2 PREDICCION RESULTADOS EN PRIMERA", callback_data="manual")],
-    [InlineKeyboardButton("\U0001f50d IA DE ACOMPAÑANTES", callback_data="b2b3")],
+    [InlineKeyboardButton("\U0001f50d IA ACOMPAÑANTES AUTO", callback_data="b2b3auto")],
+    [InlineKeyboardButton("\U0001f511 IA ACOMPAÑANTES MANUAL", callback_data="b2b3manual")],
     [InlineKeyboardButton("\U0001f41d PREDICCION PARA ANGUILAS", callback_data="anguila")],
     [InlineKeyboardButton("\U0001f4c5 ANALISIS DIA ANTERIOR", callback_data="decenas")],
     [InlineKeyboardButton("\U0001f525 NUMEROS CALIENTES", callback_data="calientes")],
@@ -131,7 +132,7 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = formatear_atrasados(atrasados, salidos, total)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
-    elif query.data == "b2b3":
+    elif query.data == "b2b3auto":
         await query.edit_message_text("\U0001f50d Buscando ultimo B1 del dia...")
         pool = await asyncio.to_thread(scrapear_hoy)
         if pool:
@@ -142,6 +143,9 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
             return METHOD
         await query.edit_message_text("No se pudieron obtener resultados.\n\nInserta los numeros manualmente (ej: 12 45 83):", reply_markup=ATRAS)
+        return NUMBERS
+    elif query.data == "b2b3manual":
+        await query.edit_message_text("Inserta los numeros B1 del dia separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
     elif query.data == "anguila":
         await query.edit_message_text("INGRESA LOS NUMEROS QUE HAN SALIDO EN PRIMERA EN TODAS LAS ANGUILAS EL DIA DE HOY (ej: 12 45 83):", reply_markup=ATRAS)
@@ -171,7 +175,7 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if metodo == "manual":
         texto = formatear_prediccion(numeros, b1_a_fechas, df)
-    elif metodo == "b2b3":
+    elif metodo == "b2b3manual":
         texto = formatear_b2b3(numeros, b1_a_fechas, df)
     elif metodo == "anguila":
         texto = formatear_anguila(numeros, df)
