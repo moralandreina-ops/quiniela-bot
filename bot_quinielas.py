@@ -329,20 +329,12 @@ def formatear_secuencias(analisis, resultados):
     lineas = ["\U0001f3af *SECUENCIAS - TOP MATCHES*"]
     lineas.append(f"Resultados: {sorted(resultados)}\n")
     top = analisis[:5]
-    for item in top:
-        seq = item["secuencia"]
-        aciertos = item["acertados"]
+    for idx, item in enumerate(top, 1):
         faltan = item["faltantes"]
-        seq_str = "-".join(f"{n:02d}" for n in seq)
-        pct = int(item["num_acertados"] / item["total"] * 100) if item["total"] else 0
-        barra = "\u2588" * (pct // 10) + "\u2591" * (10 - pct // 10) if pct else "\u2591" * 10
-        lineas.append(f"`{seq_str}`")
-        lineas.append(f"  {item['num_acertados']}/{item['total']} ({pct}%) {barra}")
-        if aciertos:
-            lineas.append(f"  \u2705 {', '.join(f'{n:02d}' for n in aciertos)}")
         if faltan:
+            lineas.append(f"*SECUENCIA {idx}*")
             lineas.append(f"  \U0001f53a *FALTAN:* {', '.join(f'{n:02d}' for n in faltan)}")
-        lineas.append("")
+            lineas.append("")
     lineas.append("*LOTERIAS SUGERIDAS:*")
     for l in LOTERIAS_SUG.get("secuencias", LOTERIAS_SUG["auto"]):
         lineas.append(f"  \U0001f4cd {l}")
