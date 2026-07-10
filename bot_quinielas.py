@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, obtener_calientes, pares_frecuentes, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, numeros_atrasados, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_loteria_secuencia, buscar_loterias
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 RUTA_SECUENCIAS = os.path.join(_script_dir, "03-10-25-05-66-00.txt")
 
-METHOD, NUMBERS = range(2)
+METHOD, NUMBERS, LOTERIA = range(3)
 
 KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f4e1 PREDICCION AUTO", callback_data="auto")],
@@ -37,10 +37,8 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f511 IA ACOMPAÑANTES MANUAL", callback_data="b2b3manual")],
     [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
     [InlineKeyboardButton("\U0001f4c5 ANALISIS DIA ANTERIOR", callback_data="decenas")],
-    [InlineKeyboardButton("\U0001f525 NUMEROS CALIENTES", callback_data="calientes")],
-    [InlineKeyboardButton("\U0001f4ca PARES FRECUENTES", callback_data="pares")],
     [InlineKeyboardButton("\U0001f3af SECUENCIAS", callback_data="secuencias")],
-    [InlineKeyboardButton("\U0001f504 ATRASADOS POR SEMANA", callback_data="atrasados")],
+    [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
 ])
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
 
@@ -152,11 +150,21 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         horas = ", ".join(anguila_horarios_ordenados())
         await query.edit_message_text(f"Ingresa el numero B1 de Anguilla y la hora (ej: 45 8AM):\n\nHorarios: {horas}", reply_markup=ATRAS)
         return NUMBERS
+    elif query.data == "loteria":
+        await query.edit_message_text("Escribe el nombre de la loteria que quieres jugar:\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Anguilla 9AM*", reply_markup=ATRAS, parse_mode="Markdown")
+        return LOTERIA
     elif query.data == "manual":
         await query.edit_message_text("Inserta los numeros que han salido hoy separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
     elif query.data == "atras":
         await query.edit_message_text("Selecciona un metodo:", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data and query.data.startswith("loteria_select:"):
+        nombre = query.data.split(":", 1)[1]
+        df = context.bot_data["df"]
+        resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
+        texto = formatear_loteria(resultado, nombre)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     else:
         await query.edit_message_text("Inserta los numeros que han salido en primera el dia de hoy (ej: 12 45 83):", reply_markup=ATRAS)
@@ -204,6 +212,40 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
     return METHOD
 
+async def loteria_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw = update.message.text.strip()
+    df = context.bot_data["df"]
+
+    matches = await asyncio.to_thread(buscar_loterias, raw, df)
+
+    if not matches:
+        await update.message.reply_text(
+            f"No encontre ninguna loteria con \"{raw}\".\n\n"
+            "Ejemplos: La Primera Noche, Loteka, New York Tarde, Anguilla 9AM, LoteDom, Leidsa, Real",
+            reply_markup=KEYBOARD
+        )
+        return METHOD
+
+    if len(matches) == 1:
+        nombre = matches[0]
+        resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
+        texto = formatear_loteria(resultado, nombre)
+        await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+
+    # Multiple matches - show as buttons
+    botones = []
+    for nombre in matches[:10]:
+        botones.append([InlineKeyboardButton(nombre, callback_data=f"loteria_select:{nombre}")])
+    botones.append([InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")])
+
+    await update.message.reply_text(
+        f"Encontre varias loterias con \"{raw}\". Selecciona una:",
+        reply_markup=InlineKeyboardMarkup(botones)
+    )
+    return METHOD
+
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Menu principal:", reply_markup=KEYBOARD)
     return ConversationHandler.END
@@ -219,10 +261,7 @@ LOTERIAS_SUG = {
     "b2b3": ["Anguilla 12PM", "Haiti Bolet 11:30 AM", "Loteka", "New Jersey Noche", "Anguilla 8AM"],
     "anguila": ["Anguilla 10AM", "Anguilla 11AM", "Anguilla 10PM", "Anguilla 9AM", "Anguilla 2PM"],
     "decenas": ["New Jersey Tarde", "La Primera Noche", "Loteka", "Anguilla 7PM", "Haiti Bolet 11:30 AM"],
-    "calientes": ["New Jersey Tarde", "La Primera Noche", "Anguilla 7PM", "Loteka", "Anguilla 6PM"],
-    "pares": ["Anguilla 12PM", "New Jersey Noche", "La Primera Noche", "Anguilla 7PM", "Haiti Bolet 11:30 AM"],
     "secuencias": ["New Jersey Tarde", "Anguilla 7PM", "La Primera Noche", "Loteka", "Anguilla 6PM"],
-    "atrasados": ["New Jersey Tarde", "La Primera Noche", "Anguilla 7PM", "Loteka", "Anguilla 6PM"],
 }
 
 def formatear_prediccion(numeros, b1_a_fechas, df):
@@ -362,43 +401,6 @@ def formatear_decenas(numeros):
         lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
 
-def formatear_calientes(df):
-    hot, cold, total = obtener_calientes(df)
-    lineas = ["\U0001f525 *NUMEROS CALIENTES*"]
-    lineas.append(f"Total de sorteos: {total:,}\n")
-    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
-    lineas.append("`" + "-" * 25 + "`")
-    for i, (num, count, pct) in enumerate(hot, 1):
-        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.1f}%`")
-    lineas.append("")
-    lineas.append("\U0001f4ca *NUMEROS FRIOS*")
-    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
-    lineas.append("`" + "-" * 25 + "`")
-    for i, (num, count, pct) in enumerate(cold, 1):
-        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.1f}%`")
-    lineas.append("")
-    lineas.append("*LOTERIAS SUGERIDAS:*")
-    for l in LOTERIAS_SUG["calientes"]:
-        lineas.append(f"  \U0001f4cd {l}")
-    return "\n".join(lineas)
-
-def formatear_pares(df):
-    b1_b2, b1_b3 = pares_frecuentes(df)
-    lineas = ["\U0001f4ca *PARES FRECUENTES*"]
-    lineas.append(f"\n`B1-B2{' ' * 16}FREC`")
-    lineas.append("`" + "-" * 28 + "`")
-    for i, (b1, b2, freq) in enumerate(b1_b2, 1):
-        lineas.append(f"`{i:<2}{S} {b1:02d}-{b2:02d}{' ' * 11}{S} {freq:<4}`")
-    lineas.append(f"\n`B1-B3{' ' * 16}FREC`")
-    lineas.append("`" + "-" * 28 + "`")
-    for i, (b1, b3, freq) in enumerate(b1_b3, 1):
-        lineas.append(f"`{i:<2}{S} {b1:02d}-{b3:02d}{' ' * 11}{S} {freq:<4}`")
-    lineas.append("")
-    lineas.append("*LOTERIAS SUGERIDAS:*")
-    for l in LOTERIAS_SUG["pares"]:
-        lineas.append(f"  \U0001f4cd {l}")
-    return "\n".join(lineas)
-
 def formatear_secuencias(analisis, resultados):
     lineas = ["\U0001f3af *SECUENCIAS - TOP MATCHES*"]
     lineas.append(f"Resultados: {sorted(resultados)}\n")
@@ -430,9 +432,33 @@ def formatear_atrasados(atrasados, salidos, total):
         lineas.append(f"`{inicio:02d}-{fin}: {', '.join(f'{n:02d}' for n in nums)}`")
     lineas.append("")
     lineas.append("*LOTERIAS SUGERIDAS:*")
-    for l in LOTERIAS_SUG["atrasados"]:
+    for l in LOTERIAS_SUG["secuencias"]:
         lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
+
+def formatear_loteria(resultado, loteria):
+    prediccion, ultimo, ultima_fecha, total = resultado
+
+    if resultado[0] is None:
+        return f"\U0001f3e0 *{loteria}*\nNo hay suficientes datos historicos (minimo 2 registros)."
+
+    lineas = [f"\U0001f3e0 *{loteria}*"]
+    lineas.append(f"\U0001f4c5 Ultimo sorteo: {ultima_fecha}")
+    lineas.append(f"\U0001f522 Ultimo B1: {ultimo:02d}\n")
+
+    if not prediccion or total == 0:
+        lineas.append(f"El numero {ultimo:02d} no ha vuelto a salir despues de la ultima vez.")
+        return "\n".join(lineas)
+
+    lineas.append(f"*Prediccion secuencial* (basado en {total} historico(s) de B1={ultimo:02d}):")
+    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
+    lineas.append("`" + "-" * 25 + "`")
+    for i, (num, count) in enumerate(prediccion, 1):
+        pct = count / total * 100
+        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
+
+    return "\n".join(lineas)
+
 
 def iniciar_health_server():
     import threading
@@ -498,6 +524,7 @@ def main():
         states={
             METHOD: [CallbackQueryHandler(metodo_handler), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
             NUMBERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, numeros_handler), CallbackQueryHandler(metodo_handler)],
+            LOTERIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, loteria_handler), CallbackQueryHandler(metodo_handler)],
         },
         fallbacks=[CommandHandler(["cancel", "cancelar"], cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
     )

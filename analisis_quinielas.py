@@ -442,6 +442,42 @@ def predecir_anguila_siguiente(b1_actual, horario_tag, df, cache=None, dias_cach
     contador = Counter(int(b1) for b1 in sig["b1"])
     return contador, sig_tag, len(fechas)
 
+def predecir_loteria_secuencia(loteria, df):
+    from collections import Counter, defaultdict
+    ldf = df[df["loteria"] == loteria].sort_values("fecha")
+    if len(ldf) < 2:
+        return None, None, None, 0
+
+    ultimo = int(ldf.iloc[-1]["b1"])
+    ultima_fecha = ldf.iloc[-1]["fecha"]
+
+    seq = defaultdict(Counter)
+    b1_prev = None
+    for _, row in ldf.iterrows():
+        if b1_prev is not None:
+            seq[b1_prev][int(row["b1"])] += 1
+        b1_prev = int(row["b1"])
+
+    if ultimo not in seq:
+        return [], ultimo, ultima_fecha, 0
+
+    siguientes = seq[ultimo]
+    total = sum(siguientes.values())
+    return siguientes.most_common(10), ultimo, ultima_fecha, total
+
+
+def buscar_loterias(query, df):
+    import re
+    q = re.sub(r"[^a-z0-9]", "", query.lower())
+    loterias = df["loteria"].unique()
+    matches = []
+    for l in sorted(loterias):
+        l_norm = re.sub(r"[^a-z0-9]", "", l.lower())
+        if q in l_norm:
+            matches.append(l)
+    return matches
+
+
 def menu():
     print("\nSelecciona metodo:")
     print("  1 - Automatico del dia (scrapea + predice)")
