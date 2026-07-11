@@ -349,7 +349,7 @@ def formatear_anguila_seq(b1, hora, contador, sig_tag, total_dias):
     lineas.append(f"")
     lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
     lineas.append("`" + "-" * 25 + "`")
-    for i, (num, count) in enumerate(contador.most_common(5), 1):
+    for i, (num, count) in enumerate(contador.most_common(10), 1):
         pct = count / total_dias * 100
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
     return "\n".join(lineas)
