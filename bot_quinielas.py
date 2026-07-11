@@ -256,14 +256,6 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 S = "│"
 
-LOTERIAS_SUG = {
-    "auto": ["New Jersey Tarde", "Anguilla 12PM", "Anguilla 7PM", "La Primera Noche", "Anguilla 6PM"],
-    "b2b3": ["Anguilla 12PM", "Haiti Bolet 11:30 AM", "Loteka", "New Jersey Noche", "Anguilla 8AM"],
-    "anguila": ["Anguilla 10AM", "Anguilla 11AM", "Anguilla 10PM", "Anguilla 9AM", "Anguilla 2PM"],
-    "decenas": ["New Jersey Tarde", "La Primera Noche", "Loteka", "Anguilla 7PM", "Haiti Bolet 11:30 AM"],
-    "secuencias": ["New Jersey Tarde", "Anguilla 7PM", "La Primera Noche", "Loteka", "Anguilla 6PM"],
-}
-
 def formatear_prediccion(numeros, b1_a_fechas, df):
     contador, fechas, max_count, mejores_pales = predecir_b1(numeros, b1_a_fechas, df)
     hoy_set = set(numeros)
@@ -279,7 +271,7 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
         lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
         lineas.append("`" + "-" * 30 + "`")
         vistos = set()
-        for num_orig, count in contador.most_common(20):
+        for num_orig, count in contador.most_common(10):
             num = inverso(num_orig) if num_orig in hoy_set else num_orig
             if num in vistos or num in hoy_set:
                 continue
@@ -289,12 +281,8 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
                 pn, pc = mejores_pales[num_orig]
                 pal = f"+{pn}({pc})"
             lineas.append(f"`{len(vistos):<2}{S} {num:<2} {S} {count:<3} {S} {pal:<10}`")
-            if len(vistos) >= 10:
+            if len(vistos) >= 5:
                 break
-        lineas.append("")
-        lineas.append("*LOTERIAS SUGERIDAS:*")
-        for l in LOTERIAS_SUG["auto"]:
-            lineas.append(f"  \U0001f4cd {l}")
     else:
         lineas.append("Sin candidatos.")
     return "\n".join(lineas)
@@ -310,16 +298,12 @@ def formatear_b2b3(numeros, b1_a_fechas, df):
     if contador:
         lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
         lineas.append("`" + "-" * 30 + "`")
-        for i, (num, count) in enumerate(contador.most_common(10), 1):
+        for i, (num, count) in enumerate(contador.most_common(5), 1):
             par = ""
             if num in mejores_pares:
                 pn, pc = mejores_pares[num]
                 par = f"+{pn}({pc})"
             lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {par:<10}`")
-        lineas.append("")
-        lineas.append("*LOTERIAS SUGERIDAS:*")
-        for l in LOTERIAS_SUG["b2b3"]:
-            lineas.append(f"  \U0001f4cd {l}")
     else:
         lineas.append("Sin acompanantes en B2/B3.")
     return "\n".join(lineas)
@@ -348,15 +332,11 @@ def formatear_anguila(numeros, df):
     lineas.append(f"Total sorteos: {len(rows)}\n")
     lineas.append(f"`# {S} NUM {S} FREC {S} HORARIOS`")
     lineas.append("`" + "-" * 35 + "`")
-    for i, (num, count) in enumerate(contador.most_common(10), 1):
+    for i, (num, count) in enumerate(contador.most_common(5), 1):
         hrs = ", ".join(sorted(horarios_por_num[num])[:3])
         if len(horarios_por_num[num]) > 3:
             hrs += "..."
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {hrs:<15}`")
-    lineas.append("")
-    lineas.append("*LOTERIAS SUGERIDAS:*")
-    for l in LOTERIAS_SUG["anguila"]:
-        lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
 
 def formatear_anguila_seq(b1, hora, contador, sig_tag, total_dias):
@@ -369,7 +349,7 @@ def formatear_anguila_seq(b1, hora, contador, sig_tag, total_dias):
     lineas.append(f"")
     lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
     lineas.append("`" + "-" * 25 + "`")
-    for i, (num, count) in enumerate(contador.most_common(10), 1):
+    for i, (num, count) in enumerate(contador.most_common(5), 1):
         pct = count / total_dias * 100
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
     return "\n".join(lineas)
@@ -396,9 +376,6 @@ def formatear_decenas(numeros):
             falt_str = ", ".join(f"{n:02d}" for n in faltaron_sin_inv)
             lineas.append(f"  \U0000274c Faltaron: {falt_str}")
         lineas.append("")
-    lineas.append("*LOTERIAS SUGERIDAS:*")
-    for l in LOTERIAS_SUG["decenas"]:
-        lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
 
 def formatear_secuencias(analisis, resultados):
@@ -411,9 +388,6 @@ def formatear_secuencias(analisis, resultados):
             lineas.append(f"*SECUENCIA {idx}*")
             lineas.append(f"  \U0001f53a *FALTAN:* {', '.join(f'{n:02d}' for n in faltan)}")
             lineas.append("")
-    lineas.append("*LOTERIAS SUGERIDAS:*")
-    for l in LOTERIAS_SUG.get("secuencias", LOTERIAS_SUG["auto"]):
-        lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
 
 def formatear_atrasados(atrasados, salidos, total):
@@ -430,10 +404,6 @@ def formatear_atrasados(atrasados, salidos, total):
         inicio = d * 10
         fin = inicio + 9
         lineas.append(f"`{inicio:02d}-{fin}: {', '.join(f'{n:02d}' for n in nums)}`")
-    lineas.append("")
-    lineas.append("*LOTERIAS SUGERIDAS:*")
-    for l in LOTERIAS_SUG["secuencias"]:
-        lineas.append(f"  \U0001f4cd {l}")
     return "\n".join(lineas)
 
 def formatear_loteria(resultado, loteria):
@@ -453,7 +423,7 @@ def formatear_loteria(resultado, loteria):
     lineas.append(f"*Prediccion secuencial* (basado en {total} historico(s) de B1={ultimo:02d}):")
     lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
     lineas.append("`" + "-" * 25 + "`")
-    for i, (num, count) in enumerate(prediccion, 1):
+    for i, (num, count) in enumerate(prediccion[:5], 1):
         pct = count / total * 100
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
 
