@@ -471,6 +471,13 @@ def main():
 
     iniciar_health_server()
 
+    print("Actualizando datos...", flush=True)
+    try:
+        from actualizar_datos import main as actualizar
+        actualizar()
+    except Exception as e:
+        print(f"Advertencia al actualizar datos: {e}", flush=True)
+
     print("Cargando datos...", flush=True)
     try:
         df = cargar_datos()
