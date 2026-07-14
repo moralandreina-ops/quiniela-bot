@@ -225,6 +225,42 @@ def scrapear_fecha(fecha):
 def scrapear_hoy():
     return scrapear_fecha(date.today())
 
+def scrapear_fecha_dict(fecha):
+    import json
+    fecha_str = fecha.strftime("%Y-%m-%d")
+    url = f"https://enloteria.com/resultados-loterias-{fecha_str}"
+    try:
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        resp.encoding = "utf-8"
+    except Exception:
+        return {}
+    m = re.search(r'<script type="application/ld\+json">(.*?)</script>', resp.text, re.DOTALL)
+    if not m:
+        return {}
+    try:
+        data = json.loads(m.group(1))
+    except Exception:
+        return {}
+    eventos = data.get("@graph", []) if isinstance(data, dict) and "@graph" in data else (data if isinstance(data, list) else [])
+    resultado = {}
+    for ev in eventos:
+        if not isinstance(ev, dict) or ev.get("@type") != "Event":
+            continue
+        props = ev.get("additionalProperty")
+        if not props:
+            continue
+        b1 = None
+        for p in props:
+            if isinstance(p, dict) and p.get("name") == "Primer Premio":
+                b1 = int(p["value"])
+                break
+        if b1 is None:
+            continue
+        nombre = ev.get("name", "")
+        nombre_norm = LOTTERY_MAP.get(nombre, nombre)
+        resultado[nombre_norm] = b1
+    return resultado
+
 def analizar_decenas(numeros):
     decenas = {}
     conjunto = set(numeros)
@@ -466,12 +502,21 @@ def predecir_anguila_siguiente(b1_actual, horario_tag, df, cache=None, dias_cach
 
 def predecir_loteria_secuencia(loteria, df):
     from collections import Counter, defaultdict
-    ldf = df[df["loteria"] == loteria].sort_values("fecha")
-    if len(ldf) < 2:
-        return None, None, None, 0
 
-    ultimo = int(ldf.iloc[-1]["b1"])
-    ultima_fecha = ldf.iloc[-1]["fecha"]
+    ultimo = None
+    ultima_fecha = None
+
+    scrape_hoy = scrapear_fecha_dict(date.today())
+    if scrape_hoy and loteria in scrape_hoy:
+        ultimo = scrape_hoy[loteria]
+        ultima_fecha = date.today()
+
+    ldf = df[df["loteria"] == loteria].sort_values("fecha")
+    if ultimo is None:
+        if len(ldf) < 2:
+            return None, None, None, 0
+        ultimo = int(ldf.iloc[-1]["b1"])
+        ultima_fecha = ldf.iloc[-1]["fecha"]
 
     seq = defaultdict(Counter)
     b1_prev = None
