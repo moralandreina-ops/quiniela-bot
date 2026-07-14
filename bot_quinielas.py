@@ -182,7 +182,11 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             b1 = int(m.group(1))
             hora = m.group(2).strip().replace(" ", "")
             if hora in [str(h) for h in range(1, 13)]:
-                hora += "AM" if int(hora) < 12 else "PM"
+                h_num = int(hora)
+                if 8 <= h_num <= 11:
+                    hora += "AM"
+                else:
+                    hora += "PM"
             cache = context.bot_data.get("anguila_cache", {})
             dias_cache = context.bot_data.get("anguila_cache_dias", {})
             contador, sig_tag, total = predecir_anguila_siguiente(b1, hora, df, cache, dias_cache)
