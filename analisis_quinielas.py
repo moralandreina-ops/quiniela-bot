@@ -8,12 +8,34 @@ import os
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 RUTA = os.path.join(_script_dir, "Resultados quinielas completo.xlsx")
 
+LOTTERY_MAP = {
+    "La Primera": "La Primera Dia",
+    "La Primera Medio D\u00eda": "La Primera Dia",
+    "La Primera Noche": "La Primera Noche",
+    "Anguilla 1 PM": "Anguilla 1PM",
+    "Anguilla 10 AM": "Anguilla 10AM",
+    "Anguilla 6 PM": "Anguilla 6PM",
+    "Anguilla 9 PM": "Anguilla 9PM",
+    "La Suerte": "La Suerte Dia",
+    "La Suerte D\u00eda": "La Suerte Dia",
+    "La Suerte 6PM": "La Suerte Tarde",
+    "La Suerte Tarde": "La Suerte Tarde",
+    "LoteDom": "Quiniela Lotedom",
+    "Loteka": "Quiniela Loteka",
+    "Real": "Quiniela Real",
+    "Quiniela Pal\u00e9": "Quiniela Pale",
+    "Georgia D\u00eda": "Georgia Dia",
+    "King Lottery D\u00eda": "King Lottery Dia",
+    "King Lottery Medio D\u00eda": "King Lottery Medio Dia",
+}
+
 def inverso(n):
     return int(str(n).zfill(2)[::-1])
 
 def cargar_datos():
     df = pd.read_excel(RUTA)
     df.columns = ["loteria", "fecha", "b1", "b2", "b3"]
+    df["loteria"] = df["loteria"].map(lambda x: LOTTERY_MAP.get(x, x))
     df["fecha"] = df["fecha"].dt.date
     df["b1"] = df["b1"].astype("Int64")
     df["b2"] = df["b2"].astype("Int64")
