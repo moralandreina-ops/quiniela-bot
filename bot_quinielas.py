@@ -427,7 +427,7 @@ def formatear_loteria(resultado, loteria):
     lineas.append(f"*Prediccion secuencial* (basado en {total} historico(s) de B1={ultimo:02d}):")
     lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
     lineas.append("`" + "-" * 25 + "`")
-    for i, (num, count) in enumerate(prediccion[:5], 1):
+    for i, (num, count) in enumerate(prediccion[:10], 1):
         pct = count / total * 100
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
 
