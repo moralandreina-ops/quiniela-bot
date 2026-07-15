@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_loteria_secuencia, buscar_loterias, metodo_final, repeticiones_hoy, repeticiones_ayer
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_loteria_secuencia, buscar_loterias, metodo_final, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
     [InlineKeyboardButton("\U0001f501 REPETIDOS HOY", callback_data="repeticiones_hoy")],
     [InlineKeyboardButton("\U0001f504 REPETIDOS AYER", callback_data="repeticiones_ayer")],
+    [InlineKeyboardButton("\U0001f502 2DA Y 3RA AYER", callback_data="repeticiones_2da_3ra")],
     [InlineKeyboardButton("\U0001f4c5 ANALISIS DIA ANTERIOR", callback_data="decenas")],
     [InlineKeyboardButton("\U0001f3af SECUENCIAS", callback_data="secuencias")],
     [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
@@ -173,6 +174,13 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("\U0001f504 Buscando top 10 de AYER...")
         df = context.bot_data["df"]
         top10, ayer = await asyncio.to_thread(repeticiones_ayer, df)
+        texto = formatear_repeticiones_ayer(top10, ayer)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "repeticiones_2da_3ra":
+        await query.edit_message_text("\U0001f502 Buscando 2da y 3ra bola de AYER...")
+        df = context.bot_data["df"]
+        top10, ayer = await asyncio.to_thread(repeticiones_2da_3ra_ayer, df)
         texto = formatear_repeticiones_ayer(top10, ayer)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD

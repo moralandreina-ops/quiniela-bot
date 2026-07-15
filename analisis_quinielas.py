@@ -611,12 +611,18 @@ def metodo_final(df, anguila_cache=None, anguila_dias_cache=None):
     return b1_anguila, hora_actual, sig_tag, pred_combinada.most_common(15), scrape
 
 
+# Cache para scraping de hoy
+_scrape_cache = {}
+_scrape_cache_fecha = None
+
 def repeticiones_hoy(df):
     """
     Números que se repiten HOY desde 8AM hasta 6:01PM.
     B1+B2+B3 de todas las loterías del día -> cuáles aparecen en múltiples loterías.
     Top 10 más repetidos.
     """
+    global _scrape_cache, _scrape_cache_fecha
+    
     manana_tarde = ['Anguilla 8AM', 'Anguilla 9AM', 'Anguilla 10AM', 'Anguilla 11AM',
                     'Anguilla 12PM', 'Anguilla 1PM', 'Anguilla 2PM', 'Anguilla 3PM',
                     'Anguilla 4PM', 'Anguilla 5PM',
@@ -624,7 +630,14 @@ def repeticiones_hoy(df):
                     'Quiniela Lotedom', 'Florida Dia', 'New Jersey Tarde',
                     'Florida Tarde', 'New York Tarde', 'Gana Mas', 'La Suerte Tarde']
     
-    scrape = scrapear_fecha_dict(date.today())
+    # Usar cache si es del mismo día
+    hoy = date.today()
+    if _scrape_cache_fecha == hoy and _scrape_cache:
+        scrape = _scrape_cache
+    else:
+        scrape = scrapear_fecha_dict(hoy)
+        _scrape_cache = scrape
+        _scrape_cache_fecha = hoy
     
     todos_nums = []
     for nombre, b1 in scrape.items():
@@ -663,6 +676,28 @@ def repeticiones_ayer(df):
     todos_nums = []
     for _, row in df_ayer.iterrows():
         todos_nums.extend([int(row["b1"]), int(row["b2"]), int(row["b3"])])
+    
+    counter = Counter(todos_nums)
+    top10 = counter.most_common(10)
+    
+    return top10, ayer
+
+
+def repeticiones_2da_3ra_ayer(df):
+    """
+    Top 10 números de B2 y B3 de AYER (sin B1).
+    Solo la 2da y 3ra bola de ayer -> candidatos a salir hoy.
+    """
+    ayer = date.today() - timedelta(days=1)
+    df_ayer = df[df["fecha"] == ayer]
+    
+    if df_ayer.empty:
+        return [], ayer
+    
+    # Solo B2 y B3 de ayer (sin B1)
+    todos_nums = []
+    for _, row in df_ayer.iterrows():
+        todos_nums.extend([int(row["b2"]), int(row["b3"])])
     
     counter = Counter(todos_nums)
     top10 = counter.most_common(10)
