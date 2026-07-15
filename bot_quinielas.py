@@ -520,20 +520,20 @@ def formatear_repeticiones_hoy(repetidos, scrape):
     lineas.append(f"*Resultados de hoy:* {len(manana_tarde)} loterias")
     lineas.append("")
     
-    if not top10:
+    if not repetidos:
         lineas.append("No hay datos disponibles aun.")
         return "\n".join(lineas)
     
     lineas.append("*TOP 10 NUMEROS (8AM - 6PM):*")
     lineas.append(f"`# {S} NUM {S} VECES {S}  %`")
     lineas.append("`" + "-" * 25 + "`")
-    total = sum(cnt for _, cnt in top10)
-    for i, (num, cnt) in enumerate(top10, 1):
+    total = sum(cnt for _, cnt in repetidos)
+    for i, (num, cnt) in enumerate(repetidos, 1):
         pct = cnt / total * 100 if total > 0 else 0
         lineas.append(f"`{i:<2}{S} {num:02d}{S} {cnt:<4}{S} {pct:.0f}%`")
     
     lineas.append("")
-    nums = [f"{n:02d}" for n, _ in top10]
+    nums = [f"{n:02d}" for n, _ in repetidos]
     lineas.append(f"*Pool:* {', '.join(nums)}")
     
     return "\n".join(lineas)
