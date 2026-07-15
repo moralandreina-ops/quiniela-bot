@@ -164,10 +164,16 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"Ingresa el numero B1 de Anguilla y la hora (ej: 45 8AM):\n\nHorarios: {horas}", reply_markup=ATRAS)
         return NUMBERS
     elif query.data == "repeticiones_hoy":
-        await query.edit_message_text("\U0001f501 Buscando repeticiones de HOY en la noche...")
+        await query.edit_message_text("\U0001f501 Buscando resultados de hoy...")
         df = context.bot_data["df"]
-        repetidos, scrape = await asyncio.to_thread(repeticiones_hoy, df)
-        texto = formatear_repeticiones_hoy(repetidos, scrape)
+        try:
+            repetidos, scrape = await asyncio.to_thread(repeticiones_hoy, df)
+            if not scrape:
+                texto = "No se pudieron obtener resultados de hoy.\n\nIntenta mas tarde."
+            else:
+                texto = formatear_repeticiones_hoy(repetidos, scrape)
+        except Exception as e:
+            texto = "Error al obtener resultados: %s\n\nIntenta mas tarde." % str(e)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "repeticiones_ayer":

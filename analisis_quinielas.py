@@ -638,21 +638,32 @@ def repeticiones_hoy(df):
     if _scrape_cache_fecha == hoy and _scrape_cache:
         scrape = _scrape_cache
     else:
-        scrape = scrapear_fecha_dict(hoy)
-        _scrape_cache = scrape
-        _scrape_cache_fecha = hoy
+        try:
+            scrape = scrapear_fecha_dict(hoy)
+            if scrape:
+                _scrape_cache = scrape
+                _scrape_cache_fecha = hoy
+        except Exception as e:
+            print("Error scraping hoy: %s" % str(e))
+            scrape = {}
+    
+    if not scrape:
+        return [], {}
     
     todos_nums = []
     for nombre, b1 in scrape.items():
         if nombre in manana_tarde:
             todos_nums.append(b1)
             # Agregar B2/B3 del historial de hoy
-            ldf = df[df["loteria"] == nombre].sort_values("fecha")
-            if len(ldf) > 0:
-                ultimo = ldf.iloc[-1]
-                if int(ultimo["b1"]) == b1:
-                    todos_nums.append(int(ultimo["b2"]))
-                    todos_nums.append(int(ultimo["b3"]))
+            try:
+                ldf = df[df["loteria"] == nombre].sort_values("fecha")
+                if len(ldf) > 0:
+                    ultimo = ldf.iloc[-1]
+                    if int(ultimo["b1"]) == b1:
+                        todos_nums.append(int(ultimo["b2"]))
+                        todos_nums.append(int(ultimo["b3"]))
+            except Exception:
+                pass
     
     if not todos_nums:
         return [], scrape
