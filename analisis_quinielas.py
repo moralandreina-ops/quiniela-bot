@@ -227,8 +227,11 @@ def scrapear_hoy():
 
 def scrapear_fecha_dict(fecha):
     import json
-    fecha_str = fecha.strftime("%Y-%m-%d")
-    url = f"https://enloteria.com/resultados-loterias-{fecha_str}"
+    if fecha == date.today():
+        url = "https://enloteria.com/resultados-loterias-hoy"
+    else:
+        fecha_str = fecha.strftime("%Y-%m-%d")
+        url = f"https://enloteria.com/resultados-loterias-{fecha_str}"
     try:
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         resp.encoding = "utf-8"
