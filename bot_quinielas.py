@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_loteria_secuencia, buscar_loterias
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_loteria_secuencia, buscar_loterias, metodo_final
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ RUTA_SECUENCIAS = os.path.join(_script_dir, "03-10-25-05-66-00.txt")
 METHOD, NUMBERS, LOTERIA = range(3)
 
 KEYBOARD = InlineKeyboardMarkup([
+    [InlineKeyboardButton("\U0001f3c6 METODO FINAL", callback_data="metodo_final")],
     [InlineKeyboardButton("\U0001f4e1 PREDICCION AUTO", callback_data="auto")],
     [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
     [InlineKeyboardButton("\U0001f50d IA ACOMPAÑANTES AUTO", callback_data="b2b3auto")],
@@ -89,6 +90,15 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(f"No se encontraron resultados de {ayer}.\n\nIntenta con otro metodo.", reply_markup=KEYBOARD)
             return METHOD
         texto = formatear_decenas(pool)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "metodo_final":
+        await query.edit_message_text("\U0001f3c6 Ejecutando METODO FINAL...\nScrapeando Anguila + Acompanantes + Anguila Seq...")
+        df = context.bot_data["df"]
+        ang_cache = context.bot_data.get("anguila_cache", {})
+        ang_dias = context.bot_data.get("anguila_cache_dias", {})
+        b1, hora, hora_sig, pred, scrape = await asyncio.to_thread(metodo_final, df, ang_cache, ang_dias)
+        texto = formatear_metodo_final(b1, hora, hora_sig, pred, scrape)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "calientes":
@@ -430,6 +440,37 @@ def formatear_loteria(resultado, loteria):
     for i, (num, count) in enumerate(prediccion[:10], 1):
         pct = count / total * 100
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
+
+    return "\n".join(lineas)
+
+
+def formatear_metodo_final(b1, hora, hora_sig, prediccion, scrape):
+    if b1 is None:
+        ang_hoy = scrape if scrape else []
+        lineas = ["\U0001f3c6 *METODO FINAL*"]
+        if ang_hoy:
+            lineas.append(f"Anguillas de hoy: {', '.join(f'{n}: {b1}' for n, b1 in ang_hoy.items() if 'anguilla' in n.lower())}")
+        lineas.append("\nNo se encontro Anguila con resultado hoy.")
+        lineas.append("\n*Horarios de Anguila:*")
+        lineas.append(", ".join(anguila_horarios_ordenados()))
+        return "\n".join(lineas)
+
+    lineas = ["\U0001f3c6 *METODO FINAL*"]
+    lineas.append(f"*Anguila {hora}* B1 = **{b1:02d}**")
+    lineas.append(f"Predice para: *{hora_sig}*")
+    lineas.append("")
+
+    if prediccion:
+        lineas.append("*TOP 15 COMBINADOS (Acomp + AngSeq):*")
+        lineas.append(f"`# {S} NUM {S} SCORE`")
+        lineas.append("`" + "-" * 20 + "`")
+        for i, (num, score) in enumerate(prediccion[:15], 1):
+            lineas.append(f"`{i:<2}{S} {num:02d}{S} {score}`")
+        lineas.append("")
+        nums = [f"{n:02d}" for n, _ in prediccion[:15]]
+        lineas.append(f"*Pool:* {', '.join(nums)}")
+    else:
+        lineas.append("Sin predicciones disponibles.")
 
     return "\n".join(lineas)
 

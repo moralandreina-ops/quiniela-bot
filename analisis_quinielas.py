@@ -544,6 +544,72 @@ def buscar_loterias(query, df):
             matches.append(l)
     return matches
 
+LOTTERY_SCHEDULE = {
+    "Quiniela Lotedom": 720, "La Primera Dia": 720,
+    "Georgia Dia": 750, "King Lottery Dia": 750, "La Suerte Dia": 750,
+    "New Jersey Tarde": 779, "Quiniela Real": 780, "Florida Dia": 810,
+    "New York Tarde": 870, "Gana Más": 870,
+    "La Suerte Tarde": 1080, "La Primera Noche": 1140,
+    "King Lottery Noche": 1170, "Quiniela Loteka": 1200,
+    "Leidsa": 1260, "Nacional Noche": 1260, "Florida Noche": 1290,
+    "New York Noche": 1350, "New Jersey Noche": 1380, "Georgia Noche": 1410,
+}
+
+ANGUIILA_MINUTOS = {
+    "8AM": 480, "9AM": 540, "10AM": 600, "11AM": 660,
+    "12PM": 720, "1PM": 780, "2PM": 840, "3PM": 900,
+    "4PM": 960, "5PM": 1020, "6PM": 1080, "7PM": 1140,
+    "8PM": 1200, "9PM": 1260, "10PM": 1320
+}
+
+def metodo_final(df, anguila_cache=None, anguila_dias_cache=None):
+    scrape = scrapear_fecha_dict(date.today())
+    anguila_horarios = anguila_horarios_ordenados()
+
+    hora_actual = None
+    b1_anguila = None
+    for i in range(len(anguila_horarios) - 1, -1, -1):
+        tag = anguila_horarios[i]
+        nombre_ang = f"Anguilla {tag}"
+        nombre_norm = LOTTERY_MAP.get(nombre_ang, nombre_ang)
+        if nombre_norm in scrape:
+            hora_actual = tag
+            b1_anguila = scrape[nombre_norm]
+            break
+
+    if hora_actual is None or b1_anguila is None:
+        ang_hoy = [l for l in scrape if "anguilla" in l.lower()]
+        return None, None, None, None, ang_hoy
+
+    pred_acomp = Counter()
+    pool = {b1_anguila, inverso(b1_anguila)}
+    b1_a_fechas = construir_indices(df)
+    fechas_match = set()
+    for n in pool:
+        fechas_match |= b1_a_fechas.get(n, set())
+    if fechas_match:
+        df_match = df[df["fecha"].isin(fechas_match) & df["b1"].isin(pool)]
+        for _, row in df_match.iterrows():
+            b2, b3 = int(row["b2"]), int(row["b3"])
+            if b2 not in pool:
+                pred_acomp[b2] += 1
+            if b3 not in pool:
+                pred_acomp[b3] += 1
+
+    pred_ang, sig_tag, total_dias = predecir_anguila_siguiente(
+        b1_anguila, hora_actual, df, anguila_cache, anguila_dias_cache
+    )
+    if pred_ang is None:
+        pred_ang = Counter()
+
+    pred_combinada = Counter()
+    for n, c in pred_acomp.most_common(10):
+        pred_combinada[n] += c * 2
+    for n, c in pred_ang.most_common(10):
+        pred_combinada[n] += c * 2
+
+    return b1_anguila, hora_actual, sig_tag, pred_combinada.most_common(15), scrape
+
 
 def menu():
     print("\nSelecciona metodo:")
