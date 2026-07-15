@@ -611,6 +611,63 @@ def metodo_final(df, anguila_cache=None, anguila_dias_cache=None):
     return b1_anguila, hora_actual, sig_tag, pred_combinada.most_common(15), scrape
 
 
+def repeticiones_hoy(df):
+    """
+    Números que se repiten HOY en la noche (6PM en adelante).
+    B1+B2+B3 de todas las loterías de noche -> cuáles aparecen en múltiples loterías.
+    """
+    noche = ['Anguilla 6PM', 'Anguilla 7PM', 'Anguilla 8PM', 'Anguilla 9PM',
+             'La Primera Noche', 'King Lottery Noche', 'Florida Noche',
+             'New York Noche', 'Nacional Noche', 'Leidsa', 'Loteka',
+             'New Jersey Noche', 'Georgia Noche']
+    
+    scrape = scrapear_fecha_dict(date.today())
+    
+    todos_nums = []
+    for nombre, b1 in scrape.items():
+        if nombre in noche:
+            todos_nums.append(b1)
+            # Agregar B2/B3 si están disponibles en el historial de hoy
+            # Usamos el último registro de cada lotería
+            ldf = df[df["loteria"] == nombre].sort_values("fecha")
+            if len(ldf) > 0:
+                ultimo = ldf.iloc[-1]
+                if int(ultimo["b1"]) == b1:
+                    todos_nums.append(int(ultimo["b2"]))
+                    todos_nums.append(int(ultimo["b3"]))
+    
+    if not todos_nums:
+        return [], scrape
+    
+    counter = Counter(todos_nums)
+    # Filtrar solo los que aparecen más de 1 vez (repiten)
+    repetidos = [(num, cnt) for num, cnt in counter.most_common() if cnt > 1]
+    
+    return repetidos[:20], scrape
+
+
+def repeticiones_ayer(df):
+    """
+    Top 10 números de AYER (todos B1+B2+B3) que más se repiten.
+    Esos números son candidatos a repetirse HOY después de 6PM.
+    """
+    ayer = date.today() - timedelta(days=1)
+    df_ayer = df[df["fecha"] == ayer]
+    
+    if df_ayer.empty:
+        return [], ayer
+    
+    # Todos los B1+B2+B3 de ayer
+    todos_nums = []
+    for _, row in df_ayer.iterrows():
+        todos_nums.extend([int(row["b1"]), int(row["b2"]), int(row["b3"])])
+    
+    counter = Counter(todos_nums)
+    top10 = counter.most_common(10)
+    
+    return top10, ayer
+
+
 def menu():
     print("\nSelecciona metodo:")
     print("  1 - Automatico del dia (scrapea + predice)")

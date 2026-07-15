@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_loteria_secuencia, buscar_loterias, metodo_final
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_loteria_secuencia, buscar_loterias, metodo_final, repeticiones_hoy, repeticiones_ayer
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,6 +37,8 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f50d IA ACOMPAÑANTES AUTO", callback_data="b2b3auto")],
     [InlineKeyboardButton("\U0001f511 IA ACOMPAÑANTES MANUAL", callback_data="b2b3manual")],
     [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
+    [InlineKeyboardButton("\U0001f501 REPETIDOS HOY", callback_data="repeticiones_hoy")],
+    [InlineKeyboardButton("\U0001f504 REPETIDOS AYER", callback_data="repeticiones_ayer")],
     [InlineKeyboardButton("\U0001f4c5 ANALISIS DIA ANTERIOR", callback_data="decenas")],
     [InlineKeyboardButton("\U0001f3af SECUENCIAS", callback_data="secuencias")],
     [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
@@ -160,6 +162,20 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         horas = ", ".join(anguila_horarios_ordenados())
         await query.edit_message_text(f"Ingresa el numero B1 de Anguilla y la hora (ej: 45 8AM):\n\nHorarios: {horas}", reply_markup=ATRAS)
         return NUMBERS
+    elif query.data == "repeticiones_hoy":
+        await query.edit_message_text("\U0001f501 Buscando repeticiones de HOY en la noche...")
+        df = context.bot_data["df"]
+        repetidos, scrape = await asyncio.to_thread(repeticiones_hoy, df)
+        texto = formatear_repeticiones_hoy(repetidos, scrape)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "repeticiones_ayer":
+        await query.edit_message_text("\U0001f504 Buscando top 10 de AYER...")
+        df = context.bot_data["df"]
+        top10, ayer = await asyncio.to_thread(repeticiones_ayer, df)
+        texto = formatear_repeticiones_ayer(top10, ayer)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
     elif query.data == "loteria":
         await query.edit_message_text("Escribe el nombre de la loteria que quieres jugar (elige entre las 54 disponibles):\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Anguilla 9AM*, *Leidsa*, *Real*, *Gana Mas*, *Florida Tarde*, *Georgia Dia*, *Haiti Bolet 5:30 PM*\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *georgia*, *haiti*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
         return LOTERIA
@@ -472,6 +488,65 @@ def formatear_metodo_final(b1, hora, hora_sig, prediccion, scrape):
     else:
         lineas.append("Sin predicciones disponibles.")
 
+    return "\n".join(lineas)
+
+
+def formatear_repeticiones_hoy(repetidos, scrape):
+    lineas = ["\U0001f501 *REPETIDOS HOY*"]
+    lineas.append("Numeros que se repiten en la noche de HOY (6PM en adelante)")
+    lineas.append("")
+    
+    if not scrape:
+        lineas.append("No hay resultados de Anguila今天 todavía.")
+        return "\n".join(lineas)
+    
+    # Mostrar Anguillas de hoy
+    ang_hoy = {n: b1 for n, b1 in scrape.items() if 'anguilla' in n.lower()}
+    if ang_hoy:
+        lineas.append("*Anguillas de hoy:*")
+        for n, b1 in sorted(ang_hoy.items()):
+            lineas.append(f"  {n}: {b1:02d}")
+        lineas.append("")
+    
+    if not repetidos:
+        lineas.append("No hay números repetidos aún en la noche.")
+        lineas.append("Espera a que salgan más loterías de noche.")
+        return "\n".join(lineas)
+    
+    lineas.append("*Numeros que REPITEN en la noche:*")
+    lineas.append(f"`# {S} NUM {S} VECES`")
+    lineas.append("`" + "-" * 18 + "`")
+    for i, (num, cnt) in enumerate(repetidos[:15], 1):
+        lineas.append(f"`{i:<2}{S} {num:02d}{S} {cnt}x`")
+    
+    lineas.append("")
+    nums = [f"{n:02d}" for n, _ in repetidos[:10]]
+    lineas.append(f"*Pool repetidos:* {', '.join(nums)}")
+    
+    return "\n".join(lineas)
+
+
+def formatear_repeticiones_ayer(top10, ayer):
+    lineas = [f"\U0001f504 *REPETIDOS AYER*"]
+    lineas.append(f"Top 10 mas frecuentes del {ayer} (B1+B2+B3)")
+    lineas.append("Candidatos a repetirse HOY despues de 6PM")
+    lineas.append("")
+    
+    if not top10:
+        lineas.append("No hay datos de ayer.")
+        return "\n".join(lineas)
+    
+    lineas.append(f"`# {S} NUM {S} VECES {S}  %`")
+    lineas.append("`" + "-" * 25 + "`")
+    total = sum(cnt for _, cnt in top10)
+    for i, (num, cnt) in enumerate(top10, 1):
+        pct = cnt / total * 100 if total > 0 else 0
+        lineas.append(f"`{i:<2}{S} {num:02d}{S} {cnt:<4}{S} {pct:.0f}%`")
+    
+    lineas.append("")
+    nums = [f"{n:02d}" for n, _ in top10]
+    lineas.append(f"*Pool:* {', '.join(nums)}")
+    
     return "\n".join(lineas)
 
 
