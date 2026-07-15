@@ -613,22 +613,24 @@ def metodo_final(df, anguila_cache=None, anguila_dias_cache=None):
 
 def repeticiones_hoy(df):
     """
-    Números que se repiten HOY en la noche (6PM en adelante).
-    B1+B2+B3 de todas las loterías de noche -> cuáles aparecen en múltiples loterías.
+    Números que se repiten HOY desde 8AM hasta 6:01PM.
+    B1+B2+B3 de todas las loterías del día -> cuáles aparecen en múltiples loterías.
+    Top 10 más repetidos.
     """
-    noche = ['Anguilla 6PM', 'Anguilla 7PM', 'Anguilla 8PM', 'Anguilla 9PM',
-             'La Primera Noche', 'King Lottery Noche', 'Florida Noche',
-             'New York Noche', 'Nacional Noche', 'Leidsa', 'Loteka',
-             'New Jersey Noche', 'Georgia Noche']
+    manana_tarde = ['Anguilla 8AM', 'Anguilla 9AM', 'Anguilla 10AM', 'Anguilla 11AM',
+                    'Anguilla 12PM', 'Anguilla 1PM', 'Anguilla 2PM', 'Anguilla 3PM',
+                    'Anguilla 4PM', 'Anguilla 5PM',
+                    'La Primera Dia', 'King Lottery Dia', 'La Suerte Dia', 'Georgia Dia',
+                    'Quiniela Lotedom', 'Florida Dia', 'New Jersey Tarde',
+                    'Florida Tarde', 'New York Tarde', 'Gana Mas', 'La Suerte Tarde']
     
     scrape = scrapear_fecha_dict(date.today())
     
     todos_nums = []
     for nombre, b1 in scrape.items():
-        if nombre in noche:
+        if nombre in manana_tarde:
             todos_nums.append(b1)
-            # Agregar B2/B3 si están disponibles en el historial de hoy
-            # Usamos el último registro de cada lotería
+            # Agregar B2/B3 del historial de hoy
             ldf = df[df["loteria"] == nombre].sort_values("fecha")
             if len(ldf) > 0:
                 ultimo = ldf.iloc[-1]
@@ -640,10 +642,10 @@ def repeticiones_hoy(df):
         return [], scrape
     
     counter = Counter(todos_nums)
-    # Filtrar solo los que aparecen más de 1 vez (repiten)
-    repetidos = [(num, cnt) for num, cnt in counter.most_common() if cnt > 1]
+    # Top 10 más frecuentes (repiten o no)
+    top10 = counter.most_common(10)
     
-    return repetidos[:20], scrape
+    return top10, scrape
 
 
 def repeticiones_ayer(df):

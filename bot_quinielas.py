@@ -493,35 +493,34 @@ def formatear_metodo_final(b1, hora, hora_sig, prediccion, scrape):
 
 def formatear_repeticiones_hoy(repetidos, scrape):
     lineas = ["\U0001f501 *REPETIDOS HOY*"]
-    lineas.append("Numeros que se repiten en la noche de HOY (6PM en adelante)")
+    lineas.append("Top 10 mas frecuentes desde 8AM hasta 6PM")
+    lineas.append("(B1+B2+B3 en cualquier posicion)")
     lineas.append("")
     
     if not scrape:
-        lineas.append("No hay resultados de Anguila今天 todavía.")
+        lineas.append("No hay resultados de hoy aun.")
         return "\n".join(lineas)
     
-    # Mostrar Anguillas de hoy
-    ang_hoy = {n: b1 for n, b1 in scrape.items() if 'anguilla' in n.lower()}
-    if ang_hoy:
-        lineas.append("*Anguillas de hoy:*")
-        for n, b1 in sorted(ang_hoy.items()):
-            lineas.append(f"  {n}: {b1:02d}")
-        lineas.append("")
+    # Mostrar cuantos resultados hay
+    manana_tarde = [n for n in scrape.keys() if any(x in n for x in ['8AM', '9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM', 'Dia', 'Tarde', 'Gana'])]
+    lineas.append(f"*Resultados de hoy:* {len(manana_tarde)} loterias")
+    lineas.append("")
     
-    if not repetidos:
-        lineas.append("No hay números repetidos aún en la noche.")
-        lineas.append("Espera a que salgan más loterías de noche.")
+    if not top10:
+        lineas.append("No hay datos disponibles aun.")
         return "\n".join(lineas)
     
-    lineas.append("*Numeros que REPITEN en la noche:*")
-    lineas.append(f"`# {S} NUM {S} VECES`")
-    lineas.append("`" + "-" * 18 + "`")
-    for i, (num, cnt) in enumerate(repetidos[:15], 1):
-        lineas.append(f"`{i:<2}{S} {num:02d}{S} {cnt}x`")
+    lineas.append("*TOP 10 NUMEROS (8AM - 6PM):*")
+    lineas.append(f"`# {S} NUM {S} VECES {S}  %`")
+    lineas.append("`" + "-" * 25 + "`")
+    total = sum(cnt for _, cnt in top10)
+    for i, (num, cnt) in enumerate(top10, 1):
+        pct = cnt / total * 100 if total > 0 else 0
+        lineas.append(f"`{i:<2}{S} {num:02d}{S} {cnt:<4}{S} {pct:.0f}%`")
     
     lineas.append("")
-    nums = [f"{n:02d}" for n, _ in repetidos[:10]]
-    lineas.append(f"*Pool repetidos:* {', '.join(nums)}")
+    nums = [f"{n:02d}" for n, _ in top10]
+    lineas.append(f"*Pool:* {', '.join(nums)}")
     
     return "\n".join(lineas)
 
