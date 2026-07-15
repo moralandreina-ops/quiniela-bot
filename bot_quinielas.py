@@ -181,7 +181,7 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("\U0001f502 Buscando 2da y 3ra bola de AYER...")
         df = context.bot_data["df"]
         top10, ayer = await asyncio.to_thread(repeticiones_2da_3ra_ayer, df)
-        texto = formatear_repeticiones_ayer(top10, ayer)
+        texto = formatear_2da_3ra_ayer(top10, ayer)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "loteria":
@@ -537,6 +537,30 @@ def formatear_repeticiones_ayer(top10, ayer):
     lineas = [f"\U0001f504 *REPETIDOS AYER*"]
     lineas.append(f"Top 10 mas frecuentes del {ayer} (B1+B2+B3)")
     lineas.append("Candidatos a repetirse HOY despues de 6PM")
+    lineas.append("")
+    
+    if not top10:
+        lineas.append("No hay datos de ayer.")
+        return "\n".join(lineas)
+    
+    lineas.append(f"`# {S} NUM {S} VECES {S}  %`")
+    lineas.append("`" + "-" * 25 + "`")
+    total = sum(cnt for _, cnt in top10)
+    for i, (num, cnt) in enumerate(top10, 1):
+        pct = cnt / total * 100 if total > 0 else 0
+        lineas.append(f"`{i:<2}{S} {num:02d}{S} {cnt:<4}{S} {pct:.0f}%`")
+    
+    lineas.append("")
+    nums = [f"{n:02d}" for n, _ in top10]
+    lineas.append(f"*Pool:* {', '.join(nums)}")
+    
+    return "\n".join(lineas)
+
+
+def formatear_2da_3ra_ayer(top10, ayer):
+    lineas = [f"\U0001f502 *2DA Y 3RA AYER*"]
+    lineas.append(f"Top 10 mas frecuentes de 2da y 3ra bola del {ayer}")
+    lineas.append("Solo B2 y B3 (sin B1)")
     lineas.append("")
     
     if not top10:
