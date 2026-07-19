@@ -58,29 +58,40 @@ def main():
     df = pd.read_excel(RUTA)
     df.columns = ["loteria", "fecha", "b1", "b2", "b3"]
     df["fecha"] = df["fecha"].dt.date
-    ultima_fecha = df["fecha"].max()
-    print(f"Ultima fecha en datos: {ultima_fecha}")
+
+    ultima_por_loteria = df.groupby("loteria")["fecha"].max()
+    ultima_global = ultima_por_loteria.max()
+    primera_global = ultima_por_loteria.min()
+    print(f"Fecha max global: {ultima_global}")
+    print(f"Fecha min (loteria mas atrasada): {primera_global}")
+
+    existentes = set(zip(df["loteria"], df["fecha"]))
 
     hoy = date.today()
     ayer = hoy - timedelta(days=1)
-    dias_faltantes = []
-    dia = ultima_fecha + timedelta(days=1)
+    dias_a_scrapear = []
+    dia = primera_global
     while dia <= ayer:
-        dias_faltantes.append(dia)
+        dias_a_scrapear.append(dia)
         dia += timedelta(days=1)
 
-    if not dias_faltantes:
+    if not dias_a_scrapear:
         print("No hay dias faltantes. Datos al dia!")
         return
 
-    print(f"Dias faltantes: {len(dias_faltantes)} ({dias_faltantes[0]} a {dias_faltantes[-1]})")
+    print(f"Dias a revisar: {len(dias_a_scrapear)} ({dias_a_scrapear[0]} a {dias_a_scrapear[-1]})")
 
     nuevos = []
-    for dia in dias_faltantes:
+    for dia in dias_a_scrapear:
         resultados = scrapear_fecha_completa(dia)
         if resultados:
-            nuevos.extend(resultados)
-            print(f"  -> {len(resultados)} sorteos")
+            nuevos_filtrados = [r for r in resultados if (r["loteria"], r["fecha"]) not in existentes]
+            nuevos.extend(nuevos_filtrados)
+            omitidos = len(resultados) - len(nuevos_filtrados)
+            msg = f"  -> {len(resultados)} sorteos"
+            if omitidos:
+                msg += f" ({omitidos} ya existian)"
+            print(msg)
         else:
             print(f"  -> Sin datos")
 
