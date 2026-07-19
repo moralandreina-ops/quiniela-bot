@@ -461,7 +461,7 @@ def precomputar_cache_anguila(df):
 
             if counter:
                 cache[(tag, n)] = counter
-                dias_cache[(tag, n)] = len(fechas)
+                dias_cache[(tag, n)] = sum(counter.values())
 
     return cache, dias_cache
 
@@ -501,7 +501,7 @@ def predecir_anguila_siguiente(b1_actual, horario_tag, df, cache=None, dias_cach
         return None, sig_tag, 0
 
     contador = Counter(int(b1) for b1 in sig["b1"])
-    return contador, sig_tag, len(fechas)
+    return contador, sig_tag, sum(contador.values())
 
 def predecir_loteria_secuencia(loteria, df):
     from collections import Counter, defaultdict
