@@ -493,7 +493,7 @@ def formatear_super_kino(combo1, combo2):
         lineas.append("`%s`" % nums2)
 
     lineas.append("")
-    lineas.append("*20 de 80 numeros - Sorteo: 9PM*")
+    lineas.append("*10 de 80 numeros - Sorteo: 9PM*")
 
     return "\n".join(lineas)
 

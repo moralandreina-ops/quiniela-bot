@@ -721,10 +721,10 @@ def repeticiones_2da_3ra_ayer(df):
 
 def metodo_super_kino():
     """
-    Genera 2 combinaciones de 20 numeros para Super Kino TV.
+    Genera 2 combinaciones de 10 numeros para Super Kino TV.
     Combo 1 "Caliente": momentum reciente + frecuencia historica.
     Combo 2 "Equilibrado": numeros atrasados + frecuencia + momentum.
-    Ambas con balance de decadas (max 4 por decada).
+    Ambas con balance de decadas (max 2 por decada).
     """
     import csv
     _script_dir_local = os.path.dirname(os.path.abspath(__file__))
@@ -766,7 +766,7 @@ def metodo_super_kino():
     max_overdue = max(len(sorted_dates) - 1 - last_seen.get(n, -1) for n in range(1, 81))
     max_freq = max(freq.get(n, 0) for n in range(1, 81))
 
-    def _pick(weights, n_pick=20):
+    def _pick(weights, n_pick=10):
         scores = {}
         for n in range(1, 81):
             all_rate = freq.get(n, 0) / total
@@ -785,7 +785,7 @@ def metodo_super_kino():
             if len(picked) >= n_pick:
                 break
             decade = n // 10
-            if decades[decade] >= 4:
+            if decades[decade] >= 2:
                 continue
             picked.add(n)
             decades[decade] += 1
