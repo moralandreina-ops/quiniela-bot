@@ -68,10 +68,9 @@ def main():
     existentes = set(zip(df["loteria"], df["fecha"]))
 
     hoy = date.today()
-    ayer = hoy - timedelta(days=1)
     dias_a_scrapear = []
     dia = primera_global
-    while dia <= ayer:
+    while dia <= hoy:
         dias_a_scrapear.append(dia)
         dia += timedelta(days=1)
 
