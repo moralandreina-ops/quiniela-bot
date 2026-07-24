@@ -69,7 +69,7 @@ def main():
 
     hoy = date.today()
     dias_a_scrapear = []
-    dia = primera_global
+    dia = max(primera_global, ultima_global - timedelta(days=3))
     while dia <= hoy:
         dias_a_scrapear.append(dia)
         dia += timedelta(days=1)
