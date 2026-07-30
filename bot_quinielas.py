@@ -613,6 +613,7 @@ def iniciar_health_server():
 
 def main():
     import sys
+    # redeploy trigger 30-jul-2026
     token = cargar_token()
     if not token:
         print("ERROR: No se encuentra el token.")
