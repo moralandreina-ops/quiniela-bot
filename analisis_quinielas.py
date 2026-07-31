@@ -509,7 +509,7 @@ def predecir_loteria_secuencia(loteria, df):
     ultimo = None
     ultima_fecha = None
 
-    scrape_hoy = scrapear_fecha_dict(date.today())
+    scrape_hoy = obtener_scrape_hoy()
     if scrape_hoy and loteria in scrape_hoy:
         ultimo = scrape_hoy[loteria]
         ultima_fecha = date.today()
@@ -566,7 +566,7 @@ ANGUIILA_MINUTOS = {
 }
 
 def metodo_final(df, anguila_cache=None, anguila_dias_cache=None):
-    scrape = scrapear_fecha_dict(date.today())
+    scrape = obtener_scrape_hoy()
     anguila_horarios = anguila_horarios_ordenados()
 
     hora_actual = None
@@ -618,35 +618,37 @@ def metodo_final(df, anguila_cache=None, anguila_dias_cache=None):
 _scrape_cache = {}
 _scrape_cache_fecha = None
 
+def obtener_scrape_hoy():
+    """Devuelve los resultados de hoy. Usa cache si es del mismo dia, si no scrapea y guarda con fecha."""
+    global _scrape_cache, _scrape_cache_fecha
+    hoy = date.today()
+    if _scrape_cache_fecha == hoy and _scrape_cache:
+        return _scrape_cache
+    try:
+        scrape = scrapear_fecha_dict(hoy)
+        if scrape:
+            _scrape_cache = scrape
+            _scrape_cache_fecha = hoy
+            return scrape
+    except Exception as e:
+        print("Error scraping hoy: %s" % str(e))
+    return {}
+
 def repeticiones_hoy(df):
     """
     Números que se repiten HOY desde 8AM hasta 6:01PM.
     B1+B2+B3 de todas las loterías del día -> cuáles aparecen en múltiples loterías.
     Top 10 más repetidos.
     """
-    global _scrape_cache, _scrape_cache_fecha
-    
     manana_tarde = ['Anguilla 8AM', 'Anguilla 9AM', 'Anguilla 10AM', 'Anguilla 11AM',
                     'Anguilla 12PM', 'Anguilla 1PM', 'Anguilla 2PM', 'Anguilla 3PM',
                     'Anguilla 4PM', 'Anguilla 5PM',
                     'La Primera Dia', 'King Lottery Dia', 'La Suerte Dia', 'Georgia Dia',
                     'Quiniela Lotedom', 'Florida Dia', 'New Jersey Tarde',
                     'Florida Tarde', 'New York Tarde', 'Gana Mas', 'La Suerte Tarde']
-    
-    # Usar cache si es del mismo día
-    hoy = date.today()
-    if _scrape_cache_fecha == hoy and _scrape_cache:
-        scrape = _scrape_cache
-    else:
-        try:
-            scrape = scrapear_fecha_dict(hoy)
-            if scrape:
-                _scrape_cache = scrape
-                _scrape_cache_fecha = hoy
-        except Exception as e:
-            print("Error scraping hoy: %s" % str(e))
-            scrape = {}
-    
+
+    scrape = obtener_scrape_hoy()
+
     if not scrape:
         return [], {}
     
