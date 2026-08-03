@@ -23,10 +23,10 @@ LOTTERY_MAP = {
     "LoteDom": "Quiniela Lotedom",
     "Loteka": "Quiniela Loteka",
     "Real": "Quiniela Real",
-    "Quiniela Pal\u00e9": "Quiniela Pale",
+    "Quiniela Pal\u00e9": "Leidsa",
     "Georgia D\u00eda": "Georgia Dia",
     "King Lottery D\u00eda": "King Lottery Dia",
-    "King Lottery Medio D\u00eda": "King Lottery Medio Dia",
+    "King Lottery Medio D\u00eda": "King Lottery Dia",
 }
 
 def inverso(n):
