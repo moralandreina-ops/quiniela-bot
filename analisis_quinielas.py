@@ -533,7 +533,10 @@ def predecir_anguila_auto(df):
                 break
 
     hoy_b1 = {}
-    scrape = obtener_scrape_hoy()
+    try:
+        scrape = scrapear_fecha_dict(date.today())
+    except Exception:
+        scrape = obtener_scrape_hoy()
     for nombre, b1 in scrape.items():
         if "Anguilla" in nombre:
             norm = normalizar_loteria(nombre)
