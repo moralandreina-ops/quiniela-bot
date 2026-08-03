@@ -416,18 +416,9 @@ def formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, to
     return "\n".join(lineas)
 
 def formatear_super_pale(contador, hoy, total):
-    lineas = [f"\U0001f9e7 *SUPER PALE: {hoy.day}/{hoy.month}*"]
-    lineas.append(f"B1s mas repetidos en esa fecha en anos anteriores ({total} sorteos)\n")
-    lineas.append(f"`# {S} NUM {S} VECES {S}  %`")
-    lineas.append("`" + "-" * 28 + "`")
-    for i, (num, count) in enumerate(contador.most_common(10), 1):
-        pct = count / total * 100
-        lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}{S} {pct:.1f}%`")
-    pares = super_pale_pares(contador)
-    lineas.append("")
-    lineas.append("\U0001f9e7 *10 SUPER PALE (combinaciones):*")
-    for i, (a, b) in enumerate(pares, 1):
-        lineas.append(f"`{i:>2}. {a:02d}-{b:02d}` (rep {contador[a]}+{contador[b]})")
+    lineas = [f"\U0001f9e7 *SUPER PALE {hoy.day}/{hoy.month}*"]
+    for a, b in super_pale_pares(contador):
+        lineas.append(f"`{a:02d}-{b:02d}`")
     return "\n".join(lineas)
 
 def formatear_decenas(numeros):

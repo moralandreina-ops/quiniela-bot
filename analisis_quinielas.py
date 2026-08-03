@@ -606,12 +606,17 @@ def super_pale_dia_como_hoy(df):
 def super_pale_pares(contador, n_pares=10):
     """
     Genera 'super pale' (pares) con los B1s mas repetidos.
-    Toma los 2*n_pares mas frecuentes y los empareja por rango de frecuencia.
+    Cada numero aporta tantos pares como veces se repite, emparejado con los
+    siguientes mas repetidos (sin repetir el mismo par).
     """
-    numeros = [n for n, _ in contador.most_common(2 * n_pares)]
+    numeros = [n for n, _ in contador.most_common()]
     pares = []
-    for i in range(0, len(numeros) - 1, 2):
-        pares.append((numeros[i], numeros[i + 1]))
+    for i in range(len(numeros)):
+        reps = contador[numeros[i]]
+        for j in range(i + 1, min(i + 1 + reps, len(numeros))):
+            pares.append((numeros[i], numeros[j]))
+            if len(pares) >= n_pares:
+                return pares
     return pares
 
 def predecir_loteria_secuencia(loteria, df):
