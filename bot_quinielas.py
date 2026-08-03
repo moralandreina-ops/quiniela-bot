@@ -417,6 +417,13 @@ def formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, to
 
 def formatear_super_pale(contador, hoy, total):
     lineas = [f"\U0001f9e7 *SUPER PALE {hoy.day}/{hoy.month}*"]
+    lineas.append("\U0001f525 *10 BOLOS MAS FRECUENTES:*")
+    lineas.append(f"`# {S} NUM {S} VECES`")
+    lineas.append("`" + "-" * 20 + "`")
+    for i, (num, count) in enumerate(contador.most_common(10), 1):
+        lineas.append(f"`{i:<2}{S} {num:02d}{S} {count}`")
+    lineas.append("")
+    lineas.append("\U0001f9e7 *SUPER PALE:*")
     for a, b in super_pale_pares(contador):
         lineas.append(f"`{a:02d}-{b:02d}`")
     return "\n".join(lineas)
