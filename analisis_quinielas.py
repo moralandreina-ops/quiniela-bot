@@ -458,6 +458,9 @@ def precomputar_cache_anguila(df):
             for f in fechas:
                 if f in sig_fecha_b1:
                     counter[sig_fecha_b1[f]] += 1
+                sig_dia = f + timedelta(days=1)
+                if sig_dia in sig_fecha_b1:
+                    counter[sig_fecha_b1[sig_dia]] += 1
 
             if counter:
                 cache[(tag, n)] = counter
@@ -496,12 +499,120 @@ def predecir_anguila_siguiente(b1_actual, horario_tag, df, cache=None, dias_cach
         return None, None, 0
 
     fechas = set(curr["fecha"])
-    sig = ang_norm[ang_norm["norm"].str.endswith(sig_tag, na=False) & ang_norm["fecha"].isin(fechas)]
+    fechas_y_sig = fechas | {f + timedelta(days=1) for f in fechas}
+    sig = ang_norm[ang_norm["norm"].str.endswith(sig_tag, na=False) & ang_norm["fecha"].isin(fechas_y_sig)]
     if sig.empty:
         return None, sig_tag, 0
 
     contador = Counter(int(b1) for b1 in sig["b1"])
     return contador, sig_tag, sum(contador.values())
+
+def predecir_anguila_auto(df):
+    """
+    ANGUILA SIGUIENTE HORA automatico.
+    Toma el ultimo sorteo de Anguilla de hoy y predice la siguiente hora.
+    Parte A: numeros que salieron en la siguiente hora (mismo dia) tras ese B1.
+    Parte B: el B1 de ayer en la siguiente hora como semilla -> numeros que lo
+             sucedieron en Anguilla durante los 5 dias calendario siguientes.
+    Devuelve: (contador_fusionado, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b)
+    """
+    from collections import Counter, defaultdict
+    from datetime import date, timedelta
+
+    ang = df[df["loteria"].str.contains("Anguilla", case=False, na=False)].copy()
+    if ang.empty:
+        return None
+    ang["norm"] = ang["loteria"].apply(normalizar_loteria)
+    horarios = anguila_horarios_ordenados()
+
+    tag_fecha_b1 = defaultdict(dict)
+    for _, row in ang.iterrows():
+        for t in horarios:
+            if row["norm"].endswith(t):
+                tag_fecha_b1[t][row["fecha"]] = int(row["b1"])
+                break
+
+    hoy_b1 = {}
+    scrape = obtener_scrape_hoy()
+    for nombre, b1 in scrape.items():
+        if "Anguilla" in nombre:
+            norm = normalizar_loteria(nombre)
+            for t in horarios:
+                if norm.endswith(t):
+                    hoy_b1[t] = int(b1)
+                    break
+    hoy = date.today()
+    for t in horarios:
+        if hoy in tag_fecha_b1[t]:
+            hoy_b1[t] = tag_fecha_b1[t][hoy]
+
+    tags_hoy = [t for t in horarios if t in hoy_b1]
+    if not tags_hoy:
+        return None
+
+    tag_actual = tags_hoy[-1]
+    idx = horarios.index(tag_actual)
+    if idx + 1 >= len(horarios):
+        return None
+    tag_sig = horarios[idx + 1]
+    b1_actual = hoy_b1[tag_actual]
+
+    sig_fb = tag_fecha_b1.get(tag_sig, {})
+
+    pool_a = {b1_actual, inverso(b1_actual)}
+    counter_a = Counter()
+    for f, b in tag_fecha_b1[tag_actual].items():
+        if b in pool_a and f in sig_fb:
+            counter_a[sig_fb[f]] += 1
+
+    ayer = hoy - timedelta(days=1)
+    b1_seed = sig_fb.get(ayer)
+    counter_b = Counter()
+    if b1_seed is not None:
+        pool_b = {b1_seed, inverso(b1_seed)}
+        fechas_b = set()
+        for t in horarios:
+            for f, b in tag_fecha_b1[t].items():
+                if b in pool_b:
+                    fechas_b.add(f)
+        for f in fechas_b:
+            for dd in range(1, 6):
+                dfut = f + timedelta(days=dd)
+                for t in horarios:
+                    b = tag_fecha_b1[t].get(dfut)
+                    if b is not None:
+                        counter_b[b] += 1
+
+    total_a = sum(counter_a.values())
+    total_b = sum(counter_b.values())
+    return counter_a + counter_b, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b
+
+def super_pale_dia_como_hoy(df):
+    """
+    SUPER PALE: B1s que salieron 'un dia como hoy' en años anteriores
+    (mismo mes y dia en todos los años, excluyendo el dia de hoy).
+    Devuelve: (contador_top, hoy, total_sorteos)
+    """
+    from collections import Counter
+    hoy = date.today()
+    s = pd.to_datetime(df["fecha"])
+    mask = (s.dt.month == hoy.month) & (s.dt.day == hoy.day) & (s.dt.date != hoy)
+    filtrado = df[mask]
+    if filtrado.empty:
+        return None, hoy, 0
+    contador = Counter(int(b) for b in filtrado["b1"])
+    return contador, hoy, sum(contador.values())
+
+def super_pale_pares(contador, n_pares=10):
+    """
+    Genera 'super pale' (pares) con los B1s mas repetidos.
+    Toma los 2*n_pares mas frecuentes y los empareja por rango de frecuencia.
+    """
+    numeros = [n for n, _ in contador.most_common(2 * n_pares)]
+    pares = []
+    for i in range(0, len(numeros) - 1, 2):
+        pares.append((numeros[i], numeros[i + 1]))
+    return pares
 
 def predecir_loteria_secuencia(loteria, df):
     from collections import Counter, defaultdict

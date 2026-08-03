@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, obtener_calientes, super_pale_dia_como_hoy, super_pale_pares
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,18 +31,14 @@ RUTA_SECUENCIAS = os.path.join(_script_dir, "03-10-25-05-66-00.txt")
 METHOD, NUMBERS, LOTERIA = range(3)
 
 KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
-    [InlineKeyboardButton("\U0001f4e1 PREDICCION AUTO", callback_data="auto")],
+    [InlineKeyboardButton("\U0001f525 NUMEROS CALIENTES", callback_data="calientes")],
     [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
-    [InlineKeyboardButton("\U0001f50d IA ACOMPAÑANTES AUTO", callback_data="b2b3auto")],
-    [InlineKeyboardButton("\U0001f511 IA ACOMPAÑANTES MANUAL", callback_data="b2b3manual")],
-    [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
-    [InlineKeyboardButton("\U0001f501 REPETIDOS HOY", callback_data="repeticiones_hoy")],
-    [InlineKeyboardButton("\U0001f504 REPETIDOS AYER", callback_data="repeticiones_ayer")],
+    [InlineKeyboardButton("\U0001f511 IA ACOMPA\u00d1ANTES MANUAL", callback_data="b2b3manual")],
     [InlineKeyboardButton("\U0001f502 2DA Y 3RA AYER", callback_data="repeticiones_2da_3ra")],
-    [InlineKeyboardButton("\U0001f4c5 ANALISIS DIA ANTERIOR", callback_data="decenas")],
-    [InlineKeyboardButton("\U0001f3af SECUENCIAS", callback_data="secuencias")],
+    [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
+    [InlineKeyboardButton("\U0001f9e7 SUPER PALE UN DIA COMO HOY", callback_data="super_pale")],
     [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
+    [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
 ])
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
 
@@ -157,9 +153,16 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Inserta los numeros B1 del dia separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
     elif query.data == "anguila":
-        horas = ", ".join(anguila_horarios_ordenados())
-        await query.edit_message_text(f"Ingresa el numero B1 de Anguilla y la hora (ej: 45 8AM):\n\nHorarios: {horas}", reply_markup=ATRAS)
-        return NUMBERS
+        await query.edit_message_text("\U0001f41d Buscando ultimo sorteo de Anguilla de hoy...")
+        df = context.bot_data["df"]
+        res = await asyncio.to_thread(predecir_anguila_auto, df)
+        if res is None:
+            await query.edit_message_text("No hay sorteo de Anguilla de hoy aun.\n\nIntenta mas tarde.", reply_markup=KEYBOARD)
+            return METHOD
+        contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b = res
+        texto = formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
     elif query.data == "repeticiones_hoy":
         await query.edit_message_text("\U0001f501 Buscando resultados de hoy...")
         df = context.bot_data["df"]
@@ -187,8 +190,18 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = formatear_2da_3ra_ayer(top10, ayer)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
+    elif query.data == "super_pale":
+        await query.edit_message_text("\U0001f9e7 Buscando B1s que salieron un dia como hoy...")
+        df = context.bot_data["df"]
+        contador, hoy, total = await asyncio.to_thread(super_pale_dia_como_hoy, df)
+        if contador is None:
+            await query.edit_message_text("Sin datos para un dia como hoy.", reply_markup=KEYBOARD)
+            return METHOD
+        texto = formatear_super_pale(contador, hoy, total)
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
     elif query.data == "loteria":
-        await query.edit_message_text("Escribe el nombre de la loteria que quieres jugar (elige entre las 54 disponibles):\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Anguilla 9AM*, *Leidsa*, *Real*, *Gana Mas*, *Florida Tarde*, *Georgia Dia*, *Haiti Bolet 5:30 PM*\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *georgia*, *haiti*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
+        await query.edit_message_text("Escribe el nombre de la loteria que quieres jugar (elige entre las 42 disponibles):\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Anguilla 9AM*, *Leidsa*, *Real*, *Gana Mas*, *Florida Tarde*, *Georgia Dia*, *Haiti Bolet 5:30 PM*\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *georgia*, *haiti*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
         return LOTERIA
     elif query.data == "manual":
         await query.edit_message_text("Inserta los numeros que han salido hoy separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
@@ -212,26 +225,6 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     metodo = context.user_data.get("metodo")
     df = context.bot_data["df"]
     b1_a_fechas = context.bot_data["b1_a_fechas"]
-
-    if metodo == "anguila":
-        m = re.match(r"(\d+)\s*(.*)", raw.upper().strip())
-        if m:
-            b1 = int(m.group(1))
-            hora = m.group(2).strip().replace(" ", "")
-            if hora in [str(h) for h in range(1, 13)]:
-                h_num = int(hora)
-                if 8 <= h_num <= 11:
-                    hora += "AM"
-                else:
-                    hora += "PM"
-            cache = context.bot_data.get("anguila_cache", {})
-            dias_cache = context.bot_data.get("anguila_cache_dias", {})
-            contador, sig_tag, total = predecir_anguila_siguiente(b1, hora, df, cache, dias_cache)
-            texto = formatear_anguila_seq(b1, hora, contador, sig_tag, total)
-        else:
-            texto = "Formato invalido. Usa: numero hora (ej: 45 8AM)"
-        await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
 
     entrada = raw.replace(",", " ").replace("-", " ")
     try:
@@ -296,6 +289,18 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return METHOD
 
 S = "│"
+
+def formatear_calientes(df):
+    hot, cold, total = obtener_calientes(df, top_n=10)
+    lineas = ["\U0001f525 *NUMEROS CALIENTES*"]
+    lineas.append(f"Top 10 B1 mas frecuentes | {total:,} sorteos\n")
+    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
+    lineas.append("`" + "-" * 25 + "`")
+    for i, (num, count, pct) in enumerate(hot, 1):
+        lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<4}{S} {pct:.1f}%`")
+    lineas.append("")
+    lineas.append(f"*FR\u00edOS (evitar):* {', '.join(f'{n:02d}' for n, _, _ in cold)}")
+    return "\n".join(lineas)
 
 def formatear_prediccion(numeros, b1_a_fechas, df):
     contador, fechas, max_count, mejores_pales = predecir_b1(numeros, b1_a_fechas, df)
@@ -393,6 +398,36 @@ def formatear_anguila_seq(b1, hora, contador, sig_tag, total_dias):
     for i, (num, count) in enumerate(contador.most_common(10), 1):
         pct = count / total_dias * 100
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
+    return "\n".join(lineas)
+
+def formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b):
+    lineas = [f"\U0001f41d *ANGUILA {tag_sig} (automatico)*"]
+    lineas.append(f"Ultimo de hoy {tag_actual}: *{b1_actual}*\n")
+    if not contador:
+        lineas.append("Sin historial suficiente.")
+        return "\n".join(lineas)
+    lineas.append(f"`# {S} NUM {S} VECES`")
+    lineas.append("`" + "-" * 22 + "`")
+    for i, (num, count) in enumerate(contador.most_common(15), 1):
+        lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}`")
+    lineas.append("")
+    lineas.append(f"A: {tag_actual}->{tag_sig}: {total_a} casos")
+    lineas.append(f"B: semilla {b1_seed:02d} ({tag_sig} de ayer): {total_b} numeros en 5 dias")
+    return "\n".join(lineas)
+
+def formatear_super_pale(contador, hoy, total):
+    lineas = [f"\U0001f9e7 *SUPER PALE: {hoy.day}/{hoy.month}*"]
+    lineas.append(f"B1s mas repetidos en esa fecha en anos anteriores ({total} sorteos)\n")
+    lineas.append(f"`# {S} NUM {S} VECES {S}  %`")
+    lineas.append("`" + "-" * 28 + "`")
+    for i, (num, count) in enumerate(contador.most_common(10), 1):
+        pct = count / total * 100
+        lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}{S} {pct:.1f}%`")
+    pares = super_pale_pares(contador)
+    lineas.append("")
+    lineas.append("\U0001f9e7 *10 SUPER PALE (combinaciones):*")
+    for i, (a, b) in enumerate(pares, 1):
+        lineas.append(f"`{i:>2}. {a:02d}-{b:02d}` (rep {contador[a]}+{contador[b]})")
     return "\n".join(lineas)
 
 def formatear_decenas(numeros):
