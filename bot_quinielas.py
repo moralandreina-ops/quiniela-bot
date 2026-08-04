@@ -154,13 +154,17 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NUMBERS
     elif query.data == "anguila":
         await query.edit_message_text("\U0001f41d Buscando ultimo sorteo de Anguilla de hoy...")
-        df = context.bot_data["df"]
-        res = await asyncio.to_thread(predecir_anguila_auto, df)
-        if res is None:
-            await query.edit_message_text("No hay sorteo de Anguilla de hoy aun.\n\nIntenta mas tarde.", reply_markup=KEYBOARD)
-            return METHOD
-        contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b = res
-        texto = formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b)
+        try:
+            df = context.bot_data["df"]
+            res = await asyncio.to_thread(predecir_anguila_auto, df)
+            if res is None:
+                await query.edit_message_text("No hay sorteo de Anguilla de hoy aun.\n\nIntenta mas tarde.", reply_markup=KEYBOARD)
+                return METHOD
+            contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b = res
+            texto = formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b)
+        except Exception as e:
+            logger.error("Error en ANGUILA: %s", e, exc_info=True)
+            texto = "Error interno en ANGUILA: %s\n\nIntenta mas tarde." % str(e)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "repeticiones_hoy":
@@ -412,7 +416,10 @@ def formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, to
         lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}`")
     lineas.append("")
     lineas.append(f"A: {tag_actual}->{tag_sig}: {total_a} casos")
-    lineas.append(f"B: semilla {b1_seed:02d} ({tag_sig} de ayer): {total_b} numeros en 5 dias")
+    if b1_seed is not None:
+        lineas.append(f"B: semilla {b1_seed:02d} ({tag_sig} de ayer): {total_b} numeros en 5 dias")
+    else:
+        lineas.append(f"B: no hay sorteo de {tag_sig} de ayer")
     return "\n".join(lineas)
 
 def formatear_super_pale(contador, hoy, total):
