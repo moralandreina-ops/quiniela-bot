@@ -391,7 +391,7 @@ def formatear_anguila_auto(counter_a, counter_b, b1_actual, tag_actual, tag_sig,
     else:
         lineas.append("Sin historial para esta transicion.")
     lineas.append("")
-    lineas.append(f"\U0001f50d *10 NUMEROS TODAS LAS ANGUILLAS (dias con los numeros de hoy hasta {tag_actual}):*")
+    lineas.append(f"\U0001f50d *10 B2/B3 (Anguilas con los B1 de hoy hasta {tag_actual}):*")
     if counter_b:
         for i, (num, count) in enumerate(counter_b.most_common(10), 1):
             lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}`")

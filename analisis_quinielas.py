@@ -512,9 +512,9 @@ def predecir_anguila_auto(df):
     ANGUILA SIGUIENTE HORA automatico.
     Toma el ultimo sorteo de Anguilla de hoy y predice la siguiente hora.
     Parte A: 5 numeros que salieron en la siguiente hora (mismo dia) tras ese B1.
-    Parte B: 10 numeros buscando en TODAS las Anguilas de los dias historicos
-             con maxima coincidencia con todos los B1 que han salido en Anguilla
-             hoy hasta la hora actual (incluye inversos).
+    Parte B: 10 B2/B3 de los sorteos de Anguilla donde el B1 coincide con los
+             numeros que han salido hoy hasta la hora actual, en los dias
+             historicos con maxima coincidencia (incluye inversos).
     Devuelve: (counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b)
     """
     from collections import Counter, defaultdict
@@ -527,11 +527,13 @@ def predecir_anguila_auto(df):
     horarios = anguila_horarios_ordenados()
 
     tag_fecha_b1 = defaultdict(dict)
+    ang_draws = defaultdict(list)
     for _, row in ang.iterrows():
         for t in horarios:
             if row["norm"].endswith(t):
                 tag_fecha_b1[t][row["fecha"]] = int(row["b1"])
                 break
+        ang_draws[row["fecha"]].append((int(row["b1"]), int(row["b2"]), int(row["b3"])))
 
     fecha_b1s = defaultdict(set)
     for t in horarios:
@@ -575,7 +577,9 @@ def predecir_anguila_auto(df):
         if b in pool_a and f in sig_fb:
             counter_a[sig_fb[f]] += 1
 
-    # PARTE B: dias con maxima coincidencia con TODOS los B1 de hoy hasta ahora
+    # PARTE B: dias con maxima coincidencia con TODOS los B1 de hoy hasta ahora;
+    # en esos dias toma los B2/B3 de los sorteos de Anguilla donde el B1 coincide
+    # con los numeros de hoy (excluye numeros que ya salieron hoy).
     pool_b = set()
     for t in tags_hoy:
         pool_b.add(hoy_b1[t])
@@ -594,10 +598,11 @@ def predecir_anguila_auto(df):
             mejores = {f for f, m in match_count.items() if m == max_m}
             ya_salieron = {hoy_b1[t] for t in tags_hoy}
             for f in mejores:
-                for t in horarios[idx + 1:]:
-                    b = tag_fecha_b1[t].get(f)
-                    if b is not None and b not in ya_salieron:
-                        counter_b[b] += 1
+                for b1, b2, b3 in ang_draws.get(f, []):
+                    if b1 in pool_b:
+                        for comp in (b2, b3):
+                            if comp not in ya_salieron:
+                                counter_b[comp] += 1
 
     total_a = sum(counter_a.values())
     total_b = sum(counter_b.values())
