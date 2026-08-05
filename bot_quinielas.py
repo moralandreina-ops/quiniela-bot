@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, obtener_calientes, super_pale_dia_como_hoy, super_pale_pares
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, super_pale_dia_como_hoy, super_pale_pares
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +31,6 @@ RUTA_SECUENCIAS = os.path.join(_script_dir, "03-10-25-05-66-00.txt")
 METHOD, NUMBERS, LOTERIA = range(3)
 
 KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("\U0001f525 NUMEROS CALIENTES", callback_data="calientes")],
     [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
     [InlineKeyboardButton("\U0001f511 IA ACOMPA\u00d1ANTES MANUAL", callback_data="b2b3manual")],
     [InlineKeyboardButton("\U0001f502 2DA Y 3RA AYER", callback_data="repeticiones_2da_3ra")],
@@ -97,16 +96,6 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = formatear_super_kino(combo1, combo2)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
-    elif query.data == "calientes":
-        df = context.bot_data["df"]
-        desde = date.today() - timedelta(days=7)
-        try:
-            df_filtrado = df[df["fecha"] >= desde]
-        except Exception:
-            df_filtrado = df
-        texto = formatear_calientes(df_filtrado)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
     elif query.data == "pares":
         df = context.bot_data["df"]
         texto = formatear_pares(df)
@@ -160,8 +149,8 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if res is None:
                 await query.edit_message_text("No hay sorteo de Anguilla de hoy aun.\n\nIntenta mas tarde.", reply_markup=KEYBOARD)
                 return METHOD
-            contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b = res
-            texto = formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b)
+            counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b = res
+            texto = formatear_anguila_auto(counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b)
         except Exception as e:
             logger.error("Error en ANGUILA: %s", e, exc_info=True)
             texto = "Error interno en ANGUILA: %s\n\nIntenta mas tarde." % str(e)
@@ -294,18 +283,6 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 S = "│"
 
-def formatear_calientes(df):
-    hot, cold, total = obtener_calientes(df, top_n=10)
-    lineas = ["\U0001f525 *NUMEROS CALIENTES*"]
-    lineas.append(f"Top 10 B1 mas frecuentes | {total:,} sorteos\n")
-    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
-    lineas.append("`" + "-" * 25 + "`")
-    for i, (num, count, pct) in enumerate(hot, 1):
-        lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<4}{S} {pct:.1f}%`")
-    lineas.append("")
-    lineas.append(f"*FR\u00edOS (evitar):* {', '.join(f'{n:02d}' for n, _, _ in cold)}")
-    return "\n".join(lineas)
-
 def formatear_prediccion(numeros, b1_a_fechas, df):
     contador, fechas, max_count, mejores_pales = predecir_b1(numeros, b1_a_fechas, df)
     hoy_set = set(numeros)
@@ -321,7 +298,7 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
         lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
         lineas.append("`" + "-" * 30 + "`")
         vistos = set()
-        for num_orig, count in contador.most_common(10):
+        for num_orig, count in contador.most_common(20):
             num = inverso(num_orig) if num_orig in hoy_set else num_orig
             if num in vistos or num in hoy_set:
                 continue
@@ -331,7 +308,7 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
                 pn, pc = mejores_pales[num_orig]
                 pal = f"+{pn}({pc})"
             lineas.append(f"`{len(vistos):<2}{S} {num:<2} {S} {count:<3} {S} {pal:<10}`")
-            if len(vistos) >= 5:
+            if len(vistos) >= 10:
                 break
     else:
         lineas.append("Sin candidatos.")
@@ -348,7 +325,7 @@ def formatear_b2b3(numeros, b1_a_fechas, df):
     if contador:
         lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
         lineas.append("`" + "-" * 30 + "`")
-        for i, (num, count) in enumerate(contador.most_common(5), 1):
+        for i, (num, count) in enumerate(contador.most_common(10), 1):
             par = ""
             if num in mejores_pares:
                 pn, pc = mejores_pares[num]
@@ -404,22 +381,24 @@ def formatear_anguila_seq(b1, hora, contador, sig_tag, total_dias):
         lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
     return "\n".join(lineas)
 
-def formatear_anguila_auto(contador, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b):
+def formatear_anguila_auto(counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b):
     lineas = [f"\U0001f41d *ANGUILA {tag_sig} (automatico)*"]
     lineas.append(f"Ultimo de hoy {tag_actual}: *{b1_actual}*\n")
-    if not contador:
-        lineas.append("Sin historial suficiente.")
-        return "\n".join(lineas)
-    lineas.append(f"`# {S} NUM {S} VECES`")
-    lineas.append("`" + "-" * 22 + "`")
-    for i, (num, count) in enumerate(contador.most_common(15), 1):
-        lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}`")
-    lineas.append("")
-    lineas.append(f"A: {tag_actual}->{tag_sig}: {total_a} casos")
-    if b1_seed is not None:
-        lineas.append(f"B: semilla {b1_seed:02d} ({tag_sig} de ayer): {total_b} numeros en 5 dias")
+    lineas.append(f"\U0001f3af *5 NUMEROS {tag_actual} -> {tag_sig} (mismo dia):*")
+    if counter_a:
+        for i, (num, count) in enumerate(counter_a.most_common(5), 1):
+            lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}`")
     else:
-        lineas.append(f"B: no hay sorteo de {tag_sig} de ayer")
+        lineas.append("Sin historial para esta transicion.")
+    lineas.append("")
+    lineas.append(f"\U0001f50d *10 NUMEROS TODAS LAS ANGUILLAS (dias con los numeros de hoy hasta {tag_actual}):*")
+    if counter_b:
+        for i, (num, count) in enumerate(counter_b.most_common(10), 1):
+            lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}`")
+    else:
+        lineas.append("Sin historial suficiente.")
+    lineas.append("")
+    lineas.append(f"A: {total_a} casos | B: {total_b} casos")
     return "\n".join(lineas)
 
 def formatear_super_pale(contador, hoy, total):

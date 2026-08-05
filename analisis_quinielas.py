@@ -511,13 +511,14 @@ def predecir_anguila_auto(df):
     """
     ANGUILA SIGUIENTE HORA automatico.
     Toma el ultimo sorteo de Anguilla de hoy y predice la siguiente hora.
-    Parte A: numeros que salieron en la siguiente hora (mismo dia) tras ese B1.
-    Parte B: el B1 de ayer en la siguiente hora como semilla -> numeros que lo
-             sucedieron en Anguilla durante los 5 dias calendario siguientes.
-    Devuelve: (contador_fusionado, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b)
+    Parte A: 5 numeros que salieron en la siguiente hora (mismo dia) tras ese B1.
+    Parte B: 10 numeros buscando en TODAS las Anguilas de los dias historicos
+             con maxima coincidencia con todos los B1 que han salido en Anguilla
+             hoy hasta la hora actual (incluye inversos).
+    Devuelve: (counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b)
     """
     from collections import Counter, defaultdict
-    from datetime import date, timedelta
+    from datetime import date
 
     ang = df[df["loteria"].str.contains("Anguilla", case=False, na=False)].copy()
     if ang.empty:
@@ -531,6 +532,11 @@ def predecir_anguila_auto(df):
             if row["norm"].endswith(t):
                 tag_fecha_b1[t][row["fecha"]] = int(row["b1"])
                 break
+
+    fecha_b1s = defaultdict(set)
+    for t in horarios:
+        for f, b in tag_fecha_b1[t].items():
+            fecha_b1s[f].add(int(b))
 
     hoy_b1 = {}
     try:
@@ -562,33 +568,40 @@ def predecir_anguila_auto(df):
 
     sig_fb = tag_fecha_b1.get(tag_sig, {})
 
+    # PARTE A: siguiente hora mismo dia tras el B1 actual (top 5 en el formateo)
     pool_a = {b1_actual, inverso(b1_actual)}
     counter_a = Counter()
     for f, b in tag_fecha_b1[tag_actual].items():
         if b in pool_a and f in sig_fb:
             counter_a[sig_fb[f]] += 1
 
-    ayer = hoy - timedelta(days=1)
-    b1_seed = sig_fb.get(ayer)
+    # PARTE B: dias con maxima coincidencia con TODOS los B1 de hoy hasta ahora
+    pool_b = set()
+    for t in tags_hoy:
+        pool_b.add(hoy_b1[t])
+        pool_b.add(inverso(hoy_b1[t]))
     counter_b = Counter()
-    if b1_seed is not None:
-        pool_b = {b1_seed, inverso(b1_seed)}
-        fechas_b = set()
-        for t in horarios:
-            for f, b in tag_fecha_b1[t].items():
-                if b in pool_b:
-                    fechas_b.add(f)
-        for f in fechas_b:
-            for dd in range(1, 6):
-                dfut = f + timedelta(days=dd)
-                for t in horarios:
-                    b = tag_fecha_b1[t].get(dfut)
-                    if b is not None:
+    if pool_b:
+        match_count = {}
+        for f, bs in fecha_b1s.items():
+            if f == hoy:
+                continue
+            m = len(pool_b & bs)
+            if m:
+                match_count[f] = m
+        if match_count:
+            max_m = max(match_count.values())
+            mejores = {f for f, m in match_count.items() if m == max_m}
+            ya_salieron = {hoy_b1[t] for t in tags_hoy}
+            for f in mejores:
+                for t in horarios[idx + 1:]:
+                    b = tag_fecha_b1[t].get(f)
+                    if b is not None and b not in ya_salieron:
                         counter_b[b] += 1
 
     total_a = sum(counter_a.values())
     total_b = sum(counter_b.values())
-    return counter_a + counter_b, b1_actual, b1_seed, tag_actual, tag_sig, total_a, total_b
+    return counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b
 
 def super_pale_dia_como_hoy(df):
     """
