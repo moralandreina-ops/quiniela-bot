@@ -35,7 +35,7 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f511 IA ACOMPA\u00d1ANTES MANUAL", callback_data="b2b3manual")],
     [InlineKeyboardButton("\U0001f502 2DA Y 3RA AYER", callback_data="repeticiones_2da_3ra")],
     [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
-    [InlineKeyboardButton("\U0001f9e7 SUPER PALE UN DIA COMO HOY", callback_data="super_pale")],
+    [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({date.today().day}/{date.today().month})", callback_data="super_pale")],
     [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
     [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
 ])
