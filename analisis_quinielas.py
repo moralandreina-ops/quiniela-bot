@@ -861,15 +861,15 @@ def repeticiones_2da_3ra_ayer(df):
 def metodo_super_kino():
     """
     Genera 2 combinaciones de 10 numeros para Super Kino TV.
-    Combo 1 "Caliente": momentum reciente + frecuencia historica.
-    Combo 2 "Equilibrado": numeros atrasados + frecuencia + momentum.
-    Ambas con balance de decadas (max 2 por decada).
+    Combo 1 "Hot all-time": los 10 numeros mas frecuentes de todo el historial.
+    Combo 2 "Recientes 60 dias": los 10 mas frecuentes de los ultimos 60 sorteos.
+    Devuelve (combo1, combo2, total_sorteos, primera_fecha, ultima_fecha).
     """
     import csv
     _script_dir_local = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(_script_dir_local, "kino_tv_results.csv")
     if not os.path.exists(csv_path):
-        return [], []
+        return [], [], 0, None, None
 
     data = {}
     with open(csv_path, "r", encoding="utf-8") as f:
@@ -881,63 +881,23 @@ def metodo_super_kino():
             data[d] = nums
 
     if not data:
-        return [], []
+        return [], [], 0, None, None
 
     sorted_dates = sorted(data.keys())
 
-    freq = Counter()
+    freq_all = Counter()
     for nums in data.values():
-        for n in nums:
-            freq[n] += 1
-    total = len(data)
+        freq_all.update(nums)
 
-    recent14 = sorted_dates[-14:]
-    recent_freq = Counter()
-    for d in recent14:
-        for n in data[d]:
-            recent_freq[n] += 1
+    recent60 = sorted_dates[-60:]
+    freq_rec = Counter()
+    for d in recent60:
+        freq_rec.update(data[d])
 
-    last_seen = {}
-    for i, d in enumerate(sorted_dates):
-        for n in data[d]:
-            last_seen[n] = i
+    combo1 = sorted(n for n, _ in freq_all.most_common(10))
+    combo2 = sorted(n for n, _ in freq_rec.most_common(10))
 
-    max_overdue = max(len(sorted_dates) - 1 - last_seen.get(n, -1) for n in range(1, 81))
-    max_freq = max(freq.get(n, 0) for n in range(1, 81))
-
-    def _pick(weights, n_pick=10):
-        scores = {}
-        for n in range(1, 81):
-            all_rate = freq.get(n, 0) / total
-            rec_rate = recent_freq.get(n, 0) / len(recent14)
-            momentum = rec_rate / all_rate if all_rate > 0 else 0
-            overdue = len(sorted_dates) - 1 - last_seen.get(n, -1)
-            mom_n = min(momentum / 2.5, 1.0)
-            ov_n = overdue / max_overdue if max_overdue > 0 else 0
-            fq_n = freq.get(n, 0) / max_freq if max_freq > 0 else 0
-            scores[n] = weights[0] * mom_n + weights[1] * ov_n + weights[2] * fq_n
-
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        picked = set()
-        decades = Counter()
-        for n, _ in ranked:
-            if len(picked) >= n_pick:
-                break
-            decade = n // 10
-            if decades[decade] >= 2:
-                continue
-            picked.add(n)
-            decades[decade] += 1
-        for n, _ in ranked:
-            if len(picked) >= n_pick:
-                break
-            picked.add(n)
-        return sorted(picked)
-
-    combo1 = _pick((0.50, 0.20, 0.30))
-    combo2 = _pick((0.30, 0.40, 0.30))
-
-    return combo1, combo2
+    return combo1, combo2, len(data), sorted_dates[0], sorted_dates[-1]
 
 
 def menu():

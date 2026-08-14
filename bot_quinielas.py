@@ -92,8 +92,8 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return METHOD
     elif query.data == "super_kino":
         await query.edit_message_text("\U0001f3c6 Generando combinaciones Super Kino TV...")
-        combo1, combo2 = await asyncio.to_thread(metodo_super_kino)
-        texto = formatear_super_kino(combo1, combo2)
+        combo1, combo2, total, f1, f2 = await asyncio.to_thread(metodo_super_kino)
+        texto = formatear_super_kino(combo1, combo2, total, f1, f2)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "pares":
@@ -490,15 +490,18 @@ def formatear_loteria(resultado, loteria):
     return "\n".join(lineas)
 
 
-def formatear_super_kino(combo1, combo2):
+def formatear_super_kino(combo1, combo2, total=0, primera=None, ultima=None):
     lineas = ["\U0001f3c6 *SUPER KINO TV*"]
-    lineas.append("Analisis de 984 sorteos (Oct 2023 - Jul 2026)")
+    if total:
+        lineas.append(f"Analisis de {total} sorteos ({primera} - {ultima})")
+    else:
+        lineas.append("Analisis de sorteos de Kino TV")
     lineas.append("")
 
     if combo1:
         nums1 = " ".join(f"{n:02d}" for n in combo1)
-        lineas.append("*COMBINACION 1 - CALIENTE:*")
-        lineas.append("Momentum reciente + Frecuencia historica")
+        lineas.append("*COMBINACION 1 - HOT ALL-TIME:*")
+        lineas.append("Los 10 numeros mas frecuentes del historial")
         lineas.append("`%s`" % nums1)
     else:
         lineas.append("Sin datos de Kino TV disponibles.")
@@ -507,8 +510,8 @@ def formatear_super_kino(combo1, combo2):
 
     if combo2:
         nums2 = " ".join(f"{n:02d}" for n in combo2)
-        lineas.append("*COMBINACION 2 - EQUILIBRADO:*")
-        lineas.append("Numeros atrasados + Frecuencia + Momentum")
+        lineas.append("*COMBINACION 2 - RECIENTES 60 DIAS:*")
+        lineas.append("Los 10 mas frecuentes de los ultimos 60 sorteos")
         lineas.append("`%s`" % nums2)
 
     lineas.append("")
