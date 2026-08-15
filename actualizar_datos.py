@@ -8,6 +8,8 @@ import re
 from datetime import date, timedelta
 import os
 
+from analisis_quinielas import hoy_dr
+
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 RUTA = os.path.join(_script_dir, "Resultados quinielas completo.xlsx")
 
@@ -67,7 +69,7 @@ def main():
 
     existentes = set(zip(df["loteria"], df["fecha"]))
 
-    hoy = date.today()
+    hoy = hoy_dr()
     dias_a_scrapear = []
     dia = max(primera_global, ultima_global - timedelta(days=3))
     while dia <= hoy:

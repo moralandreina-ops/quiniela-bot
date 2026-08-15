@@ -2,11 +2,15 @@ import pandas as pd
 from collections import Counter, defaultdict
 import requests
 import re
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 import os
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 RUTA = os.path.join(_script_dir, "Resultados quinielas completo.xlsx")
+
+def hoy_dr():
+    """Fecha actual en Republica Dominicana (UTC-4, sin horario de verano)."""
+    return (datetime.now(timezone.utc) - timedelta(hours=4)).date()
 
 LOTTERY_MAP = {
     "La Primera": "La Primera Dia",
@@ -223,11 +227,11 @@ def scrapear_fecha(fecha):
     return [b1 for _, _, b1 in loterias]
 
 def scrapear_hoy():
-    return scrapear_fecha(date.today())
+    return scrapear_fecha(hoy_dr())
 
 def scrapear_fecha_dict(fecha):
     import json
-    if fecha == date.today():
+    if fecha == hoy_dr():
         url = "https://enloteria.com/resultados-loterias-hoy"
     else:
         fecha_str = fecha.strftime("%Y-%m-%d")
@@ -405,7 +409,7 @@ def analizar_secuencias(secuencias, resultados):
     return resultados_por_secuencia
 
 def numeros_atrasados(df, dias=7):
-    desde = date.today() - timedelta(days=dias)
+    desde = hoy_dr() - timedelta(days=dias)
     df_filtrado = df[df["fecha"] >= desde]
     salidos = set(df_filtrado["b1"].dropna().astype(int))
     atrasados = [n for n in range(100) if n not in salidos]
@@ -542,7 +546,7 @@ def predecir_anguila_auto(df):
 
     hoy_b1 = {}
     try:
-        scrape = scrapear_fecha_dict(date.today())
+        scrape = scrapear_fecha_dict(hoy_dr())
     except Exception:
         scrape = obtener_scrape_hoy()
     for nombre, b1 in scrape.items():
@@ -552,7 +556,7 @@ def predecir_anguila_auto(df):
                 if norm.endswith(t):
                     hoy_b1[t] = int(b1)
                     break
-    hoy = date.today()
+    hoy = hoy_dr()
     for t in horarios:
         if hoy in tag_fecha_b1[t]:
             hoy_b1[t] = tag_fecha_b1[t][hoy]
@@ -615,7 +619,7 @@ def super_pale_dia_como_hoy(df):
     Devuelve: (contador_top, hoy, total_sorteos)
     """
     from collections import Counter
-    hoy = date.today()
+    hoy = hoy_dr()
     s = pd.to_datetime(df["fecha"])
     mask = (s.dt.month == hoy.month) & (s.dt.day == hoy.day) & (s.dt.date != hoy)
     filtrado = df[mask]
@@ -649,7 +653,7 @@ def predecir_loteria_secuencia(loteria, df):
     scrape_hoy = obtener_scrape_hoy()
     if scrape_hoy and loteria in scrape_hoy:
         ultimo = scrape_hoy[loteria]
-        ultima_fecha = date.today()
+        ultima_fecha = hoy_dr()
 
     ldf = df[df["loteria"] == loteria].sort_values("fecha")
     if ultimo is None:
@@ -758,7 +762,7 @@ _scrape_cache_fecha = None
 def obtener_scrape_hoy():
     """Devuelve los resultados de hoy. Usa cache si es del mismo dia, si no scrapea y guarda con fecha."""
     global _scrape_cache, _scrape_cache_fecha
-    hoy = date.today()
+    hoy = hoy_dr()
     if _scrape_cache_fecha == hoy and _scrape_cache:
         return _scrape_cache
     try:
@@ -819,7 +823,7 @@ def repeticiones_ayer(df):
     Top 10 números de AYER (todos B1+B2+B3) que más se repiten.
     Esos números son candidatos a repetirse HOY después de 6PM.
     """
-    ayer = date.today() - timedelta(days=1)
+    ayer = hoy_dr() - timedelta(days=1)
     df_ayer = df[df["fecha"] == ayer]
     
     if df_ayer.empty:
@@ -841,7 +845,7 @@ def repeticiones_2da_3ra_ayer(df):
     Top 10 números de B2 y B3 de AYER (sin B1).
     Solo la 2da y 3ra bola de ayer -> candidatos a salir hoy.
     """
-    ayer = date.today() - timedelta(days=1)
+    ayer = hoy_dr() - timedelta(days=1)
     df_ayer = df[df["fecha"] == ayer]
     
     if df_ayer.empty:

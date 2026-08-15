@@ -12,7 +12,7 @@ import logging
 import asyncio
 import re
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import timedelta
 from io import StringIO
 import os
 import sys
@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, super_pale_dia_como_hoy, super_pale_pares
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, super_pale_dia_como_hoy, super_pale_pares, hoy_dr
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f511 IA ACOMPA\u00d1ANTES MANUAL", callback_data="b2b3manual")],
     [InlineKeyboardButton("\U0001f502 2DA Y 3RA AYER", callback_data="repeticiones_2da_3ra")],
     [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
-    [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({date.today().day}/{date.today().month})", callback_data="super_pale")],
+    [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({hoy_dr().day}/{hoy_dr().month})", callback_data="super_pale")],
     [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
     [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
 ])
@@ -81,7 +81,7 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "decenas":
-        ayer = date.today() - timedelta(days=1)
+        ayer = hoy_dr() - timedelta(days=1)
         await query.edit_message_text(f"\U0001f4c5 Buscando resultados de {ayer}...")
         pool = await asyncio.to_thread(scrapear_fecha, ayer)
         if not pool:
@@ -103,7 +103,7 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return METHOD
     elif query.data == "secuencias":
         await query.edit_message_text("\U0001f3af Buscando resultados de ayer y hoy...")
-        ayer = date.today() - timedelta(days=1)
+        ayer = hoy_dr() - timedelta(days=1)
         pool_ayer = await asyncio.to_thread(scrapear_fecha, ayer)
         pool_hoy = await asyncio.to_thread(scrapear_hoy)
         resultados = list(set(pool_ayer + pool_hoy))
