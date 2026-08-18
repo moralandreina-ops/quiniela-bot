@@ -31,6 +31,8 @@ LOTTERY_MAP = {
     "Georgia D\u00eda": "Georgia Dia",
     "King Lottery D\u00eda": "King Lottery Dia",
     "King Lottery Medio D\u00eda": "King Lottery Dia",
+    "Nacional Gana M\u00e1s": "Gana Mas",
+    "Gana M\u00e1s": "Gana Mas",
 }
 
 def inverso(n):
@@ -898,7 +900,9 @@ def metodo_super_kino():
     for d in recent60:
         freq_rec.update(data[d])
 
-    combo1 = sorted(n for n, _ in freq_all.most_common(10))
+    combo1_lo = Counter({n: c for n, c in freq_all.items() if 1 <= n <= 40})
+    combo1_hi = Counter({n: c for n, c in freq_all.items() if 41 <= n <= 80})
+    combo1 = sorted([n for n, _ in combo1_lo.most_common(5)] + [n for n, _ in combo1_hi.most_common(5)])
     combo2 = sorted(n for n, _ in freq_rec.most_common(10))
 
     return combo1, combo2, len(data), sorted_dates[0], sorted_dates[-1]
