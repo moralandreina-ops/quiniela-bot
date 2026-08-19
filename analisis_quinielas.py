@@ -864,8 +864,15 @@ def repeticiones_2da_3ra_ayer(df):
     return top10, ayer
 
 
+_kino_actualizado_hoy = None
+
 def actualizar_kino():
-    """Scrapea los ultimos resultados de Kino TV y actualiza el CSV si faltan."""
+    """Scrapea los ultimos resultados de Kino TV y actualiza el CSV si faltan. Max 1 vez por dia."""
+    global _kino_actualizado_hoy
+    hoy = hoy_dr()
+    if _kino_actualizado_hoy == hoy:
+        return 0
+
     import csv, re, json, time
     import requests as _req
     _script_dir_local = os.path.dirname(os.path.abspath(__file__))
@@ -932,17 +939,19 @@ def actualizar_kino():
             for d, nums in nuevos:
                 w.writerow([d.isoformat()] + nums)
 
+    _kino_actualizado_hoy = hoy
     return len(nuevos)
 
 
 def metodo_super_kino():
     """
-    Genera 2 combinaciones de 10 numeros para Super Kino TV.
+    Genera 3 combinaciones de 10 numeros para Super Kino TV.
     Combo 1 "Balanced": 5 mas frecuentes de 1-40 + 5 de 41-80 (historial completo).
     Combo 2 "Recientes 60": los 10 mas frecuentes de los ultimos 60 sorteos.
-    Devuelve (combo1, combo2, total_sorteos, primera_fecha, ultima_fecha).
+    Combo 3 "Random": 10 numeros aleatorios (1-80).
+    Devuelve (combo1, combo2, combo3, total_sorteos, primera_fecha, ultima_fecha).
     """
-    import csv
+    import csv, random
     _script_dir_local = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(_script_dir_local, "kino_tv_results.csv")
     if not os.path.exists(csv_path):
@@ -975,8 +984,9 @@ def metodo_super_kino():
     combo1_hi = Counter({n: c for n, c in freq_all.items() if 41 <= n <= 80})
     combo1 = sorted([n for n, _ in combo1_lo.most_common(5)] + [n for n, _ in combo1_hi.most_common(5)])
     combo2 = sorted(n for n, _ in freq_rec.most_common(10))
+    combo3 = sorted(random.sample(range(1, 81), 10))
 
-    return combo1, combo2, len(data), sorted_dates[0], sorted_dates[-1]
+    return combo1, combo2, combo3, len(data), sorted_dates[0], sorted_dates[-1]
 
 
 def menu():

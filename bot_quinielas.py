@@ -99,8 +99,8 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         await query.edit_message_text("\U0001f3c6 Generando combinaciones Super Kino TV...")
-        combo1, combo2, total, f1, f2 = await asyncio.to_thread(metodo_super_kino)
-        texto = formatear_super_kino(combo1, combo2, total, f1, f2)
+        combo1, combo2, combo3, total, f1, f2 = await asyncio.to_thread(metodo_super_kino)
+        texto = formatear_super_kino(combo1, combo2, combo3, total, f1, f2)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "pares":
@@ -497,7 +497,7 @@ def formatear_loteria(resultado, loteria):
     return "\n".join(lineas)
 
 
-def formatear_super_kino(combo1, combo2, total=0, primera=None, ultima=None):
+def formatear_super_kino(combo1, combo2, combo3=None, total=0, primera=None, ultima=None):
     lineas = ["\U0001f3c6 *SUPER KINO TV*"]
     if total:
         lineas.append(f"Analisis de {total} sorteos ({primera} - {ultima})")
@@ -507,8 +507,8 @@ def formatear_super_kino(combo1, combo2, total=0, primera=None, ultima=None):
 
     if combo1:
         nums1 = " ".join(f"{n:02d}" for n in combo1)
-        lineas.append("*COMBINACION 1 - HOT ALL-TIME:*")
-        lineas.append("Los 10 numeros mas frecuentes del historial")
+        lineas.append("*COMBINACION 1 - BALANCED:*")
+        lineas.append("5 mas frecuentes de 1-40 + 5 de 41-80")
         lineas.append("`%s`" % nums1)
     else:
         lineas.append("Sin datos de Kino TV disponibles.")
@@ -520,6 +520,14 @@ def formatear_super_kino(combo1, combo2, total=0, primera=None, ultima=None):
         lineas.append("*COMBINACION 2 - RECIENTES 60 DIAS:*")
         lineas.append("Los 10 mas frecuentes de los ultimos 60 sorteos")
         lineas.append("`%s`" % nums2)
+
+    lineas.append("")
+
+    if combo3:
+        nums3 = " ".join(f"{n:02d}" for n in combo3)
+        lineas.append("*COMBINACION 3 - RANDOM:*")
+        lineas.append("10 numeros aleatorios (1-80)")
+        lineas.append("`%s`" % nums3)
 
     lineas.append("")
     lineas.append("*10 de 80 numeros - Sorteo: 9PM*")
