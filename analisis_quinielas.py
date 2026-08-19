@@ -864,11 +864,82 @@ def repeticiones_2da_3ra_ayer(df):
     return top10, ayer
 
 
+def actualizar_kino():
+    """Scrapea los ultimos resultados de Kino TV y actualiza el CSV si faltan."""
+    import csv, re, json, time
+    import requests as _req
+    _script_dir_local = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(_script_dir_local, "kino_tv_results.csv")
+
+    existentes = set()
+    if os.path.exists(csv_path):
+        with open(csv_path, "r", encoding="utf-8") as f:
+            for row in csv.reader(f):
+                if len(row) == 21 and row[0] != "Fecha":
+                    existentes.add(date.fromisoformat(row[0]))
+
+    if existentes:
+        ultima = max(existentes)
+    else:
+        ultima = date(2023, 10, 9)
+
+    hoy = hoy_dr()
+    if ultima >= hoy:
+        return 0
+
+    _sesion = _req.Session()
+    _sesion.trust_env = False
+
+    nuevos = []
+    actual = ultima + timedelta(days=1)
+    while actual <= hoy:
+        url = f"https://enloteria.com/resultados-super-kino-tv-{actual.strftime('%Y-%m-%d')}"
+        try:
+            resp = _sesion.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        except Exception:
+            actual += timedelta(days=1)
+            continue
+        if resp.status_code != 200:
+            actual += timedelta(days=1)
+            continue
+        try:
+            for block in re.findall(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', resp.text, re.DOTALL):
+                obj = json.loads(block)
+                for event in obj.get("@graph", []):
+                    if event.get("@type") != "Event":
+                        continue
+                    d_str = event.get("startDate", "")[:10]
+                    if not d_str:
+                        continue
+                    nums = []
+                    for prop in event.get("additionalProperty", []):
+                        if re.match(r"N.mero \d+", prop.get("name", "")):
+                            nums.append(int(prop["value"]))
+                    if len(nums) == 20:
+                        d = date.fromisoformat(d_str)
+                        if d not in existentes and ultima < d <= hoy:
+                            nuevos.append((d, nums))
+                            existentes.add(d)
+        except Exception:
+            pass
+        actual += timedelta(days=1)
+        time.sleep(0.2)
+
+    if nuevos:
+        nuevos.sort(key=lambda x: x[0])
+        with open(csv_path, "a", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            for d, nums in nuevos:
+                w.writerow([d.isoformat()] + nums)
+
+    return len(nuevos)
+
+
 def metodo_super_kino():
     """
     Genera 2 combinaciones de 10 numeros para Super Kino TV.
-    Combo 1 "Hot all-time": los 10 numeros mas frecuentes de todo el historial.
-    Combo 2 "Recientes 60 dias": los 10 mas frecuentes de los ultimos 60 sorteos.
+    Combo 1 "Balanced": 5 mas frecuentes de 1-40 + 5 de 41-80 (historial completo).
+    Combo 2 "Recientes 60": los 10 mas frecuentes de los ultimos 60 sorteos.
     Devuelve (combo1, combo2, total_sorteos, primera_fecha, ultima_fecha).
     """
     import csv

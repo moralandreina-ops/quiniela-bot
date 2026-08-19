@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, super_pale_dia_como_hoy, super_pale_pares, hoy_dr
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,6 +91,13 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "super_kino":
+        await query.edit_message_text("\U0001f3c6 Actualizando datos Kino TV...")
+        try:
+            n_kino = await asyncio.to_thread(actualizar_kino)
+            if n_kino:
+                logger.info("Kino TV: %d sorteos nuevos", n_kino)
+        except Exception:
+            pass
         await query.edit_message_text("\U0001f3c6 Generando combinaciones Super Kino TV...")
         combo1, combo2, total, f1, f2 = await asyncio.to_thread(metodo_super_kino)
         texto = formatear_super_kino(combo1, combo2, total, f1, f2)
@@ -650,6 +657,14 @@ def main():
         actualizar()
     except Exception as e:
         print(f"Advertencia al actualizar datos: {e}", flush=True)
+
+    print("Actualizando Kino TV...", flush=True)
+    try:
+        n_kino = actualizar_kino()
+        if n_kino:
+            print(f"Kino TV: {n_kino} sorteos nuevos", flush=True)
+    except Exception as e:
+        print(f"Advertencia al actualizar Kino TV: {e}", flush=True)
 
     print("Cargando datos...", flush=True)
     try:
