@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -100,7 +100,18 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         await query.edit_message_text("\U0001f3c6 Generando combinaciones Super Kino TV...")
         combo1, combo2, combo3, total, f1, f2 = await asyncio.to_thread(metodo_super_kino)
-        texto = formatear_super_kino(combo1, combo2, combo3, total, f1, f2)
+        try:
+            guardada = await asyncio.to_thread(guardar_prediccion_kino, combo1, combo2, combo3)
+            if guardada:
+                logger.info("Kino TV: prediccion de hoy guardada (1ra del dia)")
+        except Exception:
+            logger.exception("Kino TV: no se pudo guardar la prediccion")
+        aciertos_info = None
+        try:
+            aciertos_info = await asyncio.to_thread(aciertos_prediccion_ayer)
+        except Exception:
+            logger.exception("Kino TV: error calculando aciertos de ayer")
+        texto = formatear_super_kino(combo1, combo2, combo3, total, f1, f2, aciertos_info)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "pares":
@@ -497,13 +508,22 @@ def formatear_loteria(resultado, loteria):
     return "\n".join(lineas)
 
 
-def formatear_super_kino(combo1, combo2, combo3=None, total=0, primera=None, ultima=None):
+def formatear_super_kino(combo1, combo2, combo3=None, total=0, primera=None, ultima=None, aciertos_info=None):
     lineas = ["\U0001f3c6 *SUPER KINO TV*"]
     if total:
         lineas.append(f"Analisis de {total} sorteos ({primera} - {ultima})")
     else:
         lineas.append("Analisis de sorteos de Kino TV")
     lineas.append("")
+
+    if aciertos_info:
+        fecha_ayer, sorteo, detalles = aciertos_info
+        sorteo_str = " ".join(f"{n:02d}" for n in sorted(sorteo))
+        partes = " | ".join(f"`{nombre}`: *{aciertos}/10*" for nombre, aciertos, _c in detalles)
+        lineas.append(f"*ACIERTOS DE AYER ({fecha_ayer}):*")
+        lineas.append(partes)
+        lineas.append(f"Sorteo ({len(sorteo)} nums): `{sorteo_str}`")
+        lineas.append("")
 
     if combo1:
         nums1 = " ".join(f"{n:02d}" for n in combo1)

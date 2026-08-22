@@ -989,6 +989,70 @@ def metodo_super_kino():
     return combo1, combo2, combo3, len(data), sorted_dates[0], sorted_dates[-1]
 
 
+def guardar_prediccion_kino(combo1, combo2, combo3):
+    """Guarda la prediccion del dia en kino_tv_predicciones.csv (solo la primera vez del dia)."""
+    import csv
+    hoy = hoy_dr()
+    _script_dir_local = os.path.dirname(os.path.abspath(__file__))
+    pred_path = os.path.join(_script_dir_local, "kino_tv_predicciones.csv")
+
+    guardadas = set()
+    if os.path.exists(pred_path):
+        with open(pred_path, "r", encoding="utf-8") as f:
+            for row in csv.reader(f):
+                if row and row[0] != "Fecha":
+                    guardadas.add(row[0])
+    if hoy.isoformat() in guardadas:
+        return False
+
+    nueva = not os.path.exists(pred_path)
+    with open(pred_path, "a", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        if nueva:
+            w.writerow(["Fecha", "Combo", "N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8", "N9", "N10"])
+        for nombre, combo in (("C1-Balanced", combo1), ("C2-Recientes60", combo2), ("C3-Random", combo3)):
+            if combo:
+                w.writerow([hoy.isoformat(), nombre] + list(combo))
+    return True
+
+
+def aciertos_prediccion_ayer():
+    """
+    Compara la prediccion guardada de ayer contra el sorteo real de ayer de Kino TV.
+    Devuelve (fecha, nums_sorteo, [(nombre_combo, aciertos, combo), ...]) o None.
+    """
+    import csv
+    _script_dir_local = os.path.dirname(os.path.abspath(__file__))
+    pred_path = os.path.join(_script_dir_local, "kino_tv_predicciones.csv")
+    res_path = os.path.join(_script_dir_local, "kino_tv_results.csv")
+    ayer = hoy_dr() - timedelta(days=1)
+    if not os.path.exists(pred_path) or not os.path.exists(res_path):
+        return None
+
+    preds = {}
+    with open(pred_path, "r", encoding="utf-8") as f:
+        for row in csv.reader(f):
+            if len(row) >= 12 and row[0] == ayer.isoformat():
+                try:
+                    preds[row[1]] = [int(x) for x in row[2:12]]
+                except ValueError:
+                    pass
+    if not preds:
+        return None
+
+    sorteo = None
+    with open(res_path, "r", encoding="utf-8") as f:
+        for row in csv.reader(f):
+            if row and row[0] == ayer.isoformat():
+                sorteo = [int(x) for x in row[1:21]]
+                break
+    if not sorteo:
+        return None
+
+    detalles = [(nombre, len(set(combo) & set(sorteo)), combo) for nombre, combo in sorted(preds.items())]
+    return ayer, sorteo, detalles
+
+
 def menu():
     print("\nSelecciona metodo:")
     print("  1 - Automatico del dia (scrapea + predice)")
