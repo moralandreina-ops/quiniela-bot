@@ -35,6 +35,8 @@ LOTTERY_MAP = {
     "Gana M\u00e1s": "Gana Mas",
 }
 
+QUEMAITO = "El Quemaito Mayor"
+
 def inverso(n):
     return int(str(n).zfill(2)[::-1])
 
@@ -646,23 +648,92 @@ def super_pale_pares(contador, n_pares=10):
                 return pares
     return pares
 
+def scrapear_quemaito_historial():
+    """Scrapea la pagina individual de El Quemaito Mayor (-hoy).
+    Devuelve dict {fecha_iso: numero} con los ultimos ~14 sorteos publicados."""
+    import json
+    url = "https://enloteria.com/resultados-el-quemaito-mayor-hoy"
+    try:
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        resp.encoding = "utf-8"
+    except Exception:
+        return {}
+    m = re.search(r'<script type="application/ld\+json">(.*?)</script>', resp.text, re.DOTALL)
+    if not m:
+        return {}
+    try:
+        data = json.loads(m.group(1))
+    except Exception:
+        return {}
+    eventos = data.get("@graph", []) if isinstance(data, dict) and "@graph" in data else (data if isinstance(data, list) else [])
+    out = {}
+    for ev in eventos:
+        if not isinstance(ev, dict) or ev.get("@type") != "Event":
+            continue
+        props = ev.get("additionalProperty")
+        if not props:
+            continue
+        fecha_s = None
+        num = None
+        for p in props:
+            if isinstance(p, dict):
+                if p.get("name") == "Fecha del Sorteo":
+                    fecha_s = p.get("value")
+                elif p.get("name") == "N\u00famero 1":
+                    num = int(p["value"]) if p.get("value") else None
+        if fecha_s and num is not None:
+            out[fecha_s] = num
+    return out
+
+def cargar_datos_quemaito():
+    """Carga el historial de El Quemaito Mayor desde el Excel.
+    Este sorteo solo publica un numero (b2/b3 vacios), por eso cargar_datos()
+    lo descarta con dropna() y se maneja por separado."""
+    df = pd.read_excel(RUTA)
+    df.columns = ["loteria", "fecha", "b1", "b2", "b3"]
+    df = df[df["loteria"] == QUEMAITO].copy()
+    if df.empty:
+        return df
+    df["fecha"] = pd.to_datetime(df["fecha"]).dt.date
+    df["b1"] = df["b1"].astype(int)
+    return df.sort_values("fecha").reset_index(drop=True)
+
 def predecir_loteria_secuencia(loteria, df):
     from collections import Counter, defaultdict
 
     ultimo = None
     ultima_fecha = None
+    ldf = None
 
-    scrape_hoy = obtener_scrape_hoy()
-    if scrape_hoy and loteria in scrape_hoy:
-        ultimo = scrape_hoy[loteria]
-        ultima_fecha = hoy_dr()
-
-    ldf = df[df["loteria"] == loteria].sort_values("fecha")
-    if ultimo is None:
-        if len(ldf) < 2:
+    if loteria == QUEMAITO:
+        # Historial propio (solo B1, del Excel) + top-up con los ~14 ultimos sorteos de su pagina individual
+        ldf = cargar_datos_quemaito()
+        recientes = scrapear_quemaito_historial()
+        if recientes:
+            frescos = [{"fecha": date.fromisoformat(f), "b1": n} for f, n in sorted(recientes.items())]
+            if ldf.empty:
+                ldf = pd.DataFrame(frescos)
+            else:
+                max_fecha = max(ldf["fecha"])
+                faltantes = [r for r in frescos if r["fecha"] > max_fecha]
+                if faltantes:
+                    ldf = pd.concat([ldf, pd.DataFrame(faltantes)], ignore_index=True).sort_values("fecha").reset_index(drop=True)
+        if ldf.empty or len(ldf) < 2:
             return None, None, None, 0
         ultimo = int(ldf.iloc[-1]["b1"])
         ultima_fecha = ldf.iloc[-1]["fecha"]
+    else:
+        scrape_hoy = obtener_scrape_hoy()
+        if scrape_hoy and loteria in scrape_hoy:
+            ultimo = scrape_hoy[loteria]
+            ultima_fecha = hoy_dr()
+
+        ldf = df[df["loteria"] == loteria].sort_values("fecha")
+        if ultimo is None:
+            if len(ldf) < 2:
+                return None, None, None, 0
+            ultimo = int(ldf.iloc[-1]["b1"])
+            ultima_fecha = ldf.iloc[-1]["fecha"]
 
     seq = defaultdict(Counter)
     b1_prev = None
@@ -682,7 +753,9 @@ def predecir_loteria_secuencia(loteria, df):
 def buscar_loterias(query, df):
     import re
     q = re.sub(r"[^a-z0-9]", "", query.lower())
-    loterias = df["loteria"].unique()
+    loterias = list(df["loteria"].unique())
+    if QUEMAITO not in loterias:
+        loterias.append(QUEMAITO)
     matches = []
     for l in sorted(loterias):
         l_norm = re.sub(r"[^a-z0-9]", "", l.lower())

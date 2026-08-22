@@ -212,7 +212,7 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "loteria":
-        await query.edit_message_text("Escribe el nombre de la loteria que quieres jugar (elige entre las 42 disponibles):\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Anguilla 9AM*, *Leidsa*, *Real*, *Gana Mas*, *Florida Tarde*, *Georgia Dia*, *Haiti Bolet 5:30 PM*\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *georgia*, *haiti*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
+        await query.edit_message_text("Escribe el nombre de la loteria que quieres jugar (elige entre las 43 disponibles):\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Anguilla 9AM*, *Leidsa*, *Real*, *Gana Mas*, *Florida Tarde*, *Georgia Dia*, *Haiti Bolet 5:30 PM*, *Quemaito*\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *georgia*, *haiti*, *quemaito*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
         return LOTERIA
     elif query.data == "manual":
         await query.edit_message_text("Inserta los numeros que han salido hoy separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
