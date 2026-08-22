@@ -747,7 +747,8 @@ def predecir_loteria_secuencia(loteria, df):
 
     siguientes = seq[ultimo]
     total = sum(siguientes.values())
-    return siguientes.most_common(10), ultimo, ultima_fecha, total
+    n_top = 30 if loteria == QUEMAITO else 10
+    return siguientes.most_common(n_top), ultimo, ultima_fecha, total
 
 
 def buscar_loterias(query, df):
