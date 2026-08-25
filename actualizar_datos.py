@@ -19,7 +19,10 @@ def scrapear_fecha_completa(fecha):
     url = f"https://enloteria.com/resultados-loterias-{fecha_str}"
     print(f"  Scrapeando {url} ...")
     try:
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        # Try with proxy disabled
+        session = requests.Session()
+        session.trust_env = False  # Ignore environment proxy settings
+        resp = session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         resp.encoding = "utf-8"
     except Exception as e:
         print(f"  Error de conexion: {e}")

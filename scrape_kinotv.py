@@ -10,7 +10,9 @@ def scrape_kino_date(target_date):
     """Scrape Kino TV results. Returns list of (date, numbers) for ~14 days."""
     url = "https://enloteria.com/resultados-super-kino-tv-%s" % target_date.strftime("%Y-%m-%d")
     try:
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+        session = requests.Session()
+        session.trust_env = False  # Ignore environment proxy settings
+        resp = session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
     except requests.RequestException:
         return []
 

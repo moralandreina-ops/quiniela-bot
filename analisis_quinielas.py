@@ -191,7 +191,9 @@ def scrapear_fecha(fecha):
     url = f"https://enloteria.com/resultados-loterias-{fecha_str}"
     print(f"Scrapeando {url} ...")
     try:
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        session = requests.Session()
+        session.trust_env = False  # Ignore environment proxy settings
+        resp = session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         resp.encoding = "utf-8"
     except Exception as e:
         print(f"Error de conexion: {e}")
@@ -241,7 +243,9 @@ def scrapear_fecha_dict(fecha):
         fecha_str = fecha.strftime("%Y-%m-%d")
         url = f"https://enloteria.com/resultados-loterias-{fecha_str}"
     try:
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        session = requests.Session()
+        session.trust_env = False  # Ignore environment proxy settings
+        resp = session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         resp.encoding = "utf-8"
     except Exception:
         return {}
@@ -654,7 +658,9 @@ def scrapear_quemaito_historial():
     import json
     url = "https://enloteria.com/resultados-el-quemaito-mayor-hoy"
     try:
-        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        session = requests.Session()
+        session.trust_env = False  # Ignore environment proxy settings
+        resp = session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         resp.encoding = "utf-8"
     except Exception:
         return {}
