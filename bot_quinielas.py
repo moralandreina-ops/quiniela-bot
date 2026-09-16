@@ -365,20 +365,27 @@ def formatear_b2b3_freq(top10):
     hoy = hoy_dr()
     lineas = [f"\U0001f50d *B2/B3 MAS FRECUENTES UN DIA COMO HOY ({hoy.day:02d})*"]
     lineas.append("B2/B3 de todos los sorteos en dias con dia del mes como hoy")
+    lineas.append("(03/30 es un solo bolo)")
     lineas.append("")
     if not top10:
         lineas.append("Sin datos disponibles.")
         return "\n".join(lineas)
     lineas.append(f"`# {S} NUM {S} VECES {S}  %`")
-    lineas.append("`" + "-" * 25 + "`")
+    lineas.append("`" + "-" * 27 + "`")
     total = sum(cnt for _, cnt in top10)
     for i, (num, cnt) in enumerate(top10, 1):
         pct = cnt / total * 100 if total > 0 else 0
-        lineas.append(f"`{i:<2}{S} {num:02d}{S} {cnt:<5}{S} {pct:.0f}%`")
+        inv = (num % 10) * 10 + num // 10
+        par_str = f"{num:02d}/{inv:02d}"
+        lineas.append(f"`{i:<2}{S} {par_str:<7}{S} {cnt:<5}{S} {pct:.0f}%`")
     lineas.append("")
-    nums = [f"{n:02d}" for n, _ in top10]
+    nums = [f"{n:02d}/{inv_of(n):02d}" for n, _ in top10]
     lineas.append(f"*Pool:* {', '.join(nums)}")
     return "\n".join(lineas)
+
+
+def inv_of(n):
+    return (n % 10) * 10 + n // 10
 
 def formatear_anguila(numeros, df):
     ang = df[df["loteria"].str.contains("Anguilla", case=False, na=False)].copy()
@@ -448,15 +455,19 @@ def formatear_anguila_auto(counter_a, counter_b, b1_actual, tag_actual, tag_sig,
 
 def formatear_super_pale(contador, hoy, total):
     lineas = [f"\U0001f9e7 *SUPER PALE {hoy.day}/{hoy.month}*"]
-    lineas.append("\U0001f525 *10 BOLOS MAS FRECUENTES:*")
+    lineas.append("\U0001f525 *10 BOLOS MAS FRECUENTES (incluye inverso):*")
     lineas.append(f"`# {S} NUM {S} VECES`")
-    lineas.append("`" + "-" * 20 + "`")
+    lineas.append("`" + "-" * 24 + "`")
     for i, (num, count) in enumerate(contador.most_common(10), 1):
-        lineas.append(f"`{i:<2}{S} {num:02d}{S} {count}`")
+        inv = (num % 10) * 10 + num // 10
+        par_str = f"{num:02d}/{inv:02d}"
+        lineas.append(f"`{i:<2}{S} {par_str:<7}{S} {count}`")
     lineas.append("")
-    lineas.append("\U0001f9e7 *SUPER PALE:*")
+    lineas.append("\U0001f9e7 *SUPER PALE (03/30 es un solo bolo):*")
     for a, b in super_pale_pares(contador):
-        lineas.append(f"`{a:02d}-{b:02d}`")
+        ainv = (a % 10) * 10 + a // 10
+        binv = (b % 10) * 10 + b // 10
+        lineas.append(f"`{a:02d}/{ainv:02d}-{b:02d}/{binv:02d}`")
     return "\n".join(lineas)
 
 def formatear_decenas(numeros):

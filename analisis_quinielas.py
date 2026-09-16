@@ -7,6 +7,7 @@ import os
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 RUTA = os.path.join(_script_dir, "Resultados quinielas completo.xlsx")
+
 def hoy_dr():
     """Fecha actual en Republica Dominicana (UTC-4, sin horario de verano)."""
     return (datetime.now(timezone.utc) - timedelta(hours=4)).date()
@@ -652,7 +653,10 @@ def super_pale_dia_como_hoy(df):
     """
     SUPER PALE: B1s que salieron 'un dia como hoy' en años anteriores
     (mismo mes y dia en todos los años, excluyendo el dia de hoy).
-    Devuelve: (contador_top, hoy, total_sorteos)
+    Considera inversos: 03 y 30 se cuentan como el mismo par (k=min(n,inv)).
+    Devuelve: (contador_pares, hoy, total_sorteos)
+      - contador_pares: Counter con key=None siempre (estructura conservada);
+         en su lugar devuelve ContadorOBS: se usa pair-key para conteo.
     """
     from collections import Counter
     hoy = hoy_dr()
@@ -661,16 +665,21 @@ def super_pale_dia_como_hoy(df):
     filtrado = df[mask]
     if filtrado.empty:
         return None, hoy, 0
-    contador = Counter(int(b) for b in filtrado["b1"])
+    # Contar por par (min(n, inverso(n))) -> 03 y 30 cuentan juntos
+    contador = Counter(_par_key(int(b)) for b in filtrado["b1"])
     return contador, hoy, sum(contador.values())
+
+def _par_key(n):
+    return min(n, ((n % 10) * 10 + n // 10))
 
 def super_pale_pares(contador, n_pares=10):
     """
-    Genera 'super pale' (pares) con los B1s mas repetidos.
-    Cada numero aporta tantos pares como veces se repite, emparejado con los
-    siguientes mas repetidos (sin repetir el mismo par).
+    Genera 'super pale' (pares) con los pares B1 mas repetidos (cada bolo
+    incluye su inverso: 03/30 es un solo numero). Cada par aporta tantos
+    pares como veces se repite, emparejado con los siguientes mas repetidos
+    (sin repetir el mismo par).
     """
-    numeros = [n for n, _ in contador.most_common()]
+    numeros = [k for k, _ in contador.most_common()]
     pares = []
     for i in range(len(numeros)):
         reps = contador[numeros[i]]
@@ -976,14 +985,16 @@ def b2b3_frecuentes(df, top=10):
     """
     Top `top` de B2/B3 (sin B1) más frecuentes en días del mes como HOY
     (mismo día del mes en todo el histórico).
+    Agrupa inversos: 03 y 30 cuentan como el mismo par.
     """
     dia = hoy_dr().day
     fechas_dia = {f for f in df["fecha"] if f.day == dia}
     df_dia = df[df["fecha"].isin(fechas_dia)]
-    todos_nums = []
+    todos_keys = []
     for _, row in df_dia.iterrows():
-        todos_nums.extend([int(row["b2"]), int(row["b3"])])
-    counter = Counter(todos_nums)
+        todos_keys.append(_par_key(int(row["b2"])))
+        todos_keys.append(_par_key(int(row["b3"])))
+    counter = Counter(todos_keys)
     return counter.most_common(top)
 
 
