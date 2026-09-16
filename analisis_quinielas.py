@@ -7,7 +7,6 @@ import os
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 RUTA = os.path.join(_script_dir, "Resultados quinielas completo.xlsx")
-
 def hoy_dr():
     """Fecha actual en Republica Dominicana (UTC-4, sin horario de verano)."""
     return (datetime.now(timezone.utc) - timedelta(hours=4)).date()
@@ -478,18 +477,40 @@ def precomputar_cache_anguila(df):
                 cache[(tag, n)] = counter
                 dias_cache[(tag, n)] = sum(counter.values())
 
+    # Caso especial: 10PM -> 8AM del dia siguiente
+    tag_10pm = "10PM"
+    sig_tag_8am = "8AM"
+    sig_fb_8am = tag_fecha_b1.get(sig_tag_8am, {})
+    if tag_10pm in tag_fecha_b1:
+        for n in range(100):
+            pool = {n, inverso(n)}
+            fechas = {f for f, b in tag_fecha_b1[tag_10pm].items() if b in pool}
+            if not fechas:
+                continue
+            counter = Counter()
+            for f in fechas:
+                sig_dia = f + timedelta(days=1)
+                if sig_dia in sig_fb_8am:
+                    counter[sig_fb_8am[sig_dia]] += 1
+            if counter:
+                cache[(tag_10pm, n)] = counter
+                dias_cache[(tag_10pm, n)] = sum(counter.values())
+
     return cache, dias_cache
 
 def predecir_anguila_siguiente(b1_actual, horario_tag, df, cache=None, dias_cache=None):
     h_actual = _hora_a_24h(horario_tag)
-    if h_actual is None or h_actual >= 22:
+    if h_actual is None:
         return None, None, 0
-    h_sig = h_actual + 1
     horarios = anguila_horarios_ordenados()
-    sig_tag = [t for t in horarios if _hora_a_24h(t) == h_sig]
-    if not sig_tag:
-        return None, None, 0
-    sig_tag = sig_tag[0]
+    if h_actual >= 22:
+        sig_tag = "8AM"
+    else:
+        h_sig = h_actual + 1
+        sig_tag_list = [t for t in horarios if _hora_a_24h(t) == h_sig]
+        if not sig_tag_list:
+            return None, None, 0
+        sig_tag = sig_tag_list[0]
 
     if cache is not None:
         key = (horario_tag, b1_actual)
@@ -576,18 +597,25 @@ def predecir_anguila_auto(df):
     tag_actual = tags_hoy[-1]
     idx = horarios.index(tag_actual)
     if idx + 1 >= len(horarios):
-        return None
-    tag_sig = horarios[idx + 1]
+        tag_sig = "8AM"
+    else:
+        tag_sig = horarios[idx + 1]
     b1_actual = hoy_b1[tag_actual]
 
     sig_fb = tag_fecha_b1.get(tag_sig, {})
 
-    # PARTE A: siguiente hora mismo dia tras el B1 actual (top 5 en el formateo)
+    # PARTE A: siguiente hora tras el B1 actual (top 5 en el formateo)
     pool_a = {b1_actual, inverso(b1_actual)}
     counter_a = Counter()
+    es_wrap_noche = (tag_actual == "10PM")
     for f, b in tag_fecha_b1[tag_actual].items():
-        if b in pool_a and f in sig_fb:
-            counter_a[sig_fb[f]] += 1
+        if b in pool_a:
+            if es_wrap_noche:
+                f_sig = f + timedelta(days=1)
+            else:
+                f_sig = f
+            if f_sig in sig_fb:
+                counter_a[sig_fb[f_sig]] += 1
 
     # PARTE B: dias con maxima coincidencia con TODOS los B1 de hoy hasta ahora;
     # en esos dias toma los B2/B3 de los sorteos de Anguilla donde el B1 coincide
@@ -942,6 +970,21 @@ def repeticiones_2da_3ra_ayer(df):
     top10 = counter.most_common(10)
     
     return top10, ayer
+
+
+def b2b3_frecuentes(df, top=10):
+    """
+    Top `top` de B2/B3 (sin B1) más frecuentes en días del mes como HOY
+    (mismo día del mes en todo el histórico).
+    """
+    dia = hoy_dr().day
+    fechas_dia = {f for f in df["fecha"] if f.day == dia}
+    df_dia = df[df["fecha"].isin(fechas_dia)]
+    todos_nums = []
+    for _, row in df_dia.iterrows():
+        todos_nums.extend([int(row["b2"]), int(row["b3"])])
+    counter = Counter(todos_nums)
+    return counter.most_common(top)
 
 
 _kino_actualizado_hoy = None
