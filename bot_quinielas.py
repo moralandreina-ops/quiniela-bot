@@ -20,7 +20,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, b2b3_frecuentes, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, b2b3_frecuentes, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer, cruzar_secuencias_lotseq, b1_ayer_loteria, transformar_reverso
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,11 +32,11 @@ METHOD, NUMBERS, LOTERIA = range(3)
 
 KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
-    [InlineKeyboardButton("\U0001f50d B2/B3 FRECUENTES", callback_data="b2b3freq")],
     [InlineKeyboardButton("\U0001f502 2DA Y 3RA AYER", callback_data="repeticiones_2da_3ra")],
     [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
     [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({hoy_dr().day}/{hoy_dr().month})", callback_data="super_pale")],
     [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
+    [InlineKeyboardButton("\U0001f3af SECUENCIAS x LOTSEQ", callback_data="secuencias")],
     [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
 ])
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
@@ -120,23 +120,8 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "secuencias":
-        await query.edit_message_text("\U0001f3af Buscando resultados de ayer y hoy...")
-        ayer = hoy_dr() - timedelta(days=1)
-        pool_ayer = await asyncio.to_thread(scrapear_fecha, ayer)
-        pool_hoy = await asyncio.to_thread(scrapear_hoy)
-        resultados = list(set(pool_ayer + pool_hoy))
-        if not resultados:
-            await query.edit_message_text("No se pudieron obtener resultados.\n\nIntenta mas tarde.", reply_markup=KEYBOARD)
-            return METHOD
-        try:
-            secuencias = await asyncio.to_thread(cargar_secuencias, RUTA_SECUENCIAS)
-        except Exception as e:
-            await query.edit_message_text(f"Error al cargar secuencias: {e}", reply_markup=KEYBOARD)
-            return METHOD
-        analisis = analizar_secuencias(secuencias, resultados)
-        texto = formatear_secuencias(analisis, resultados)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
+        await query.edit_message_text("Escribe el nombre de la loteria que quieres cruzar con las secuencias:\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Leidsa*, *Real*, *Gana Mas*, *Anguilla 9AM*...\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *leidsa*, *quemaito*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
+        return LOTERIA
     elif query.data == "atrasados":
         await query.edit_message_text("\U0001f504 Buscando numeros atrasados 7 dias...")
         df = context.bot_data["df"]
@@ -156,13 +141,6 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return METHOD
         await query.edit_message_text("No se pudieron obtener resultados.\n\nInserta los numeros manualmente (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
-    elif query.data == "b2b3freq":
-        await query.edit_message_text("\U0001f50d Buscando B2/B3 mas frecuentes en dias como hoy...")
-        df = context.bot_data["df"]
-        top10 = await asyncio.to_thread(b2b3_frecuentes, df)
-        texto = formatear_b2b3_freq(top10)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
     elif query.data == "b2b3manual":
         await query.edit_message_text("Inserta los numeros B1 del dia separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
@@ -229,9 +207,12 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return METHOD
     elif query.data and query.data.startswith("loteria_select:"):
         nombre = query.data.split(":", 1)[1]
-        df = context.bot_data["df"]
-        resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
-        texto = formatear_loteria(resultado, nombre)
+        if context.user_data.get("metodo") == "secuencias":
+            texto = await _secuencias_lotseq(nombre, context)
+        else:
+            df = context.bot_data["df"]
+            resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
+            texto = formatear_loteria(resultado, nombre)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     else:
@@ -264,6 +245,29 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
     return METHOD
 
+async def _secuencias_lotseq(nombre, context):
+    try:
+        secuencias = await asyncio.to_thread(cargar_secuencias, RUTA_SECUENCIAS)
+        if not secuencias:
+            return "No hay secuencias cargadas en el archivo."
+
+        b1s_hoy = await asyncio.to_thread(scrapear_hoy)
+        if not b1s_hoy:
+            return "No se pudieron obtener los B1 de hoy.\n\nIntenta mas tarde."
+
+        df = context.bot_data["df"]
+        resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
+        prediccion, ultimo, ultima_fecha, total = resultado
+        if prediccion is None:
+            return f"No hay suficientes datos historicos para {nombre}."
+
+        cruzados = await asyncio.to_thread(cruzar_secuencias_lotseq, secuencias, b1s_hoy, prediccion)
+        b1_ayer = await asyncio.to_thread(b1_ayer_loteria, nombre, df)
+        return formatear_secuencias_v2(nombre, cruzados, b1_ayer, ultimo, ultima_fecha)
+    except Exception as e:
+        logger.error("Error en SECUENCIAS x LOTSEQ: %s", e, exc_info=True)
+        return f"Error interno: {e}\n\nIntenta mas tarde."
+
 async def loteria_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = update.message.text.strip()
     df = context.bot_data["df"]
@@ -280,8 +284,11 @@ async def loteria_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if len(matches) == 1:
         nombre = matches[0]
-        resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
-        texto = formatear_loteria(resultado, nombre)
+        if context.user_data.get("metodo") == "secuencias":
+            texto = await _secuencias_lotseq(nombre, context)
+        else:
+            resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
+            texto = formatear_loteria(resultado, nombre)
         await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
 
@@ -494,16 +501,29 @@ def formatear_decenas(numeros):
         lineas.append("")
     return "\n".join(lineas)
 
-def formatear_secuencias(analisis, resultados):
-    lineas = ["\U0001f3af *SECUENCIAS - TOP MATCHES*"]
-    lineas.append(f"Resultados: {sorted(resultados)}\n")
-    top = analisis[:5]
-    for idx, item in enumerate(top, 1):
-        faltan = item["faltantes"]
-        if faltan:
-            lineas.append(f"*SECUENCIA {idx}*")
-            lineas.append(f"  \U0001f53a *FALTAN:* {', '.join(f'{n:02d}' for n in faltan)}")
-            lineas.append("")
+def formatear_secuencias_v2(nombre, cruzados, b1_ayer, ultimo, ultima_fecha):
+    lineas = ["\U0001f3af *SECUENCIAS x LOTSEQ*", ""]
+    lineas.append(f"\U0001f3e0 *{nombre}*")
+    lineas.append(f"\U0001f4c5 Ultimo B1: {ultimo:02d} ({ultima_fecha})")
+    lineas.append("")
+
+    if cruzados:
+        lineas.append("\U0001f4af *B1s que coinciden (secuencias vs LOTSEQ, con inversos):*")
+        nums = " ".join(f"{n:02d}" for n in cruzados)
+        invs = " ".join(f"{inverso(n):02d}" for n in cruzados)
+        lineas.append(f"`{nums}`")
+        lineas.append("Inversos:")
+        lineas.append(f"`{invs}`")
+    else:
+        lineas.append("Sin coincidencias entre las secuencias (2+ aciertos hoy) y el pool LOTSEQ.")
+    lineas.append("")
+
+    if b1_ayer is not None:
+        rev = transformar_reverso(b1_ayer)
+        lineas.append(f"\U0001f519 *REVERSO*: B1 ayer={b1_ayer:02d} -> `{rev:02d}` (inv: `{inverso(rev):02d}`)  (1=6,2=7,3=8,4=9,5=0)")
+    else:
+        lineas.append("No hay B1 de ayer para calcular el REVERSO.")
+
     return "\n".join(lineas)
 
 def formatear_atrasados(atrasados, salidos, total):

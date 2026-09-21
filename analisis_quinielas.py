@@ -5,8 +5,19 @@ import re
 from datetime import date, timedelta, datetime, timezone
 import os
 
+# Bypass CCProxy (192.172.0.213:808) - blocks social media, allows enloteria.com
+os.environ["NO_PROXY"] = "*"
+os.environ["no_proxy"] = "*"
+
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 RUTA = os.path.join(_script_dir, "Resultados quinielas completo.xlsx")
+
+def _sesion():
+    import requests
+    s = requests.Session()
+    s.trust_env = False
+    s.proxies = {"http": "", "https": ""}
+    return s
 
 def hoy_dr():
     """Fecha actual en Republica Dominicana (UTC-4, sin horario de verano)."""
@@ -415,6 +426,39 @@ def analizar_secuencias(secuencias, resultados):
         })
     resultados_por_secuencia.sort(key=lambda x: (-x["num_acertados"], x["total"]))
     return resultados_por_secuencia
+
+def transformar_reverso(n):
+    """Convierte cada digito d -> (d+5)%10 (1=6, 2=7, 3=8, 4=9, 5=0, y viceversa)."""
+    return int("".join(str((int(d) + 5) % 10) for d in f"{n:02d}"))
+
+def b1_ayer_loteria(loteria, df):
+    """Ultimo B1 de la loteria dado anterior a hoy (idealmente el de ayer)."""
+    ayer = hoy_dr() - timedelta(days=1)
+    if loteria == QUEMAITO:
+        ldf = cargar_datos_quemaito()
+    else:
+        ldf = df[df["loteria"] == loteria]
+    if ldf.empty:
+        return None
+    ldf = ldf.sort_values("fecha")
+    prev = ldf[ldf["fecha"] <= ayer]
+    if prev.empty:
+        return None
+    return int(prev.iloc[-1]["b1"])
+
+def cruzar_secuencias_lotseq(secuencias, b1s_hoy, prediccion):
+    """Secuencias con mas de un B1 salido hoy, cruzadas con el pool LOTSEQ.
+    Todo se compara con sus inversos (01=10)."""
+    b1_set = set(b1s_hoy)
+    pool = {n for n, _ in prediccion}
+    cruzados = set()
+    for seq in secuencias:
+        aciertos = [n for n in seq if n in b1_set or inverso(n) in b1_set]
+        if len(aciertos) > 1:
+            for n in seq:
+                if n in pool or inverso(n) in pool:
+                    cruzados.add(n)
+    return sorted(cruzados)
 
 def numeros_atrasados(df, dias=7):
     desde = hoy_dr() - timedelta(days=dias)
