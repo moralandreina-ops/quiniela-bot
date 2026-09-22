@@ -68,7 +68,8 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data["metodo"] = query.data
+    if not query.data.startswith("loteria_select:"):
+        context.user_data["metodo"] = query.data
     if query.data == "auto":
         await query.edit_message_text("\U0001f4e1 Ejecutando metodo automatico del dia...\nScrapeando resultados de hoy...")
         pool = await asyncio.to_thread(scrapear_hoy)
@@ -508,19 +509,16 @@ def formatear_secuencias_v2(nombre, cruzados, b1_ayer, ultimo, ultima_fecha):
     lineas.append("")
 
     if cruzados:
-        lineas.append("\U0001f4af *B1s que coinciden (secuencias vs LOTSEQ, con inversos):*")
+        lineas.append("\U0001f4af *B1s que coinciden (secuencias vs LOTSEQ):*")
         nums = " ".join(f"{n:02d}" for n in cruzados)
-        invs = " ".join(f"{inverso(n):02d}" for n in cruzados)
         lineas.append(f"`{nums}`")
-        lineas.append("Inversos:")
-        lineas.append(f"`{invs}`")
     else:
         lineas.append("Sin coincidencias entre las secuencias (2+ aciertos hoy) y el pool LOTSEQ.")
     lineas.append("")
 
     if b1_ayer is not None:
         rev = transformar_reverso(b1_ayer)
-        lineas.append(f"\U0001f519 *REVERSO*: B1 ayer={b1_ayer:02d} -> `{rev:02d}` (inv: `{inverso(rev):02d}`)  (1=6,2=7,3=8,4=9,5=0)")
+        lineas.append(f"\U0001f519 *REVERSO*: B1 ayer={b1_ayer:02d} -> `{rev:02d}`  (1=6,2=7,3=8,4=9,5=0)")
     else:
         lineas.append("No hay B1 de ayer para calcular el REVERSO.")
 

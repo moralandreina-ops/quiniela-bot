@@ -457,7 +457,7 @@ def cruzar_secuencias_lotseq(secuencias, b1s_hoy, prediccion):
         if len(aciertos) > 1:
             for n in seq:
                 if n in pool or inverso(n) in pool:
-                    cruzados.add(n)
+                    cruzados.add(min(n, inverso(n)))
     return sorted(cruzados)
 
 def numeros_atrasados(df, dias=7):
