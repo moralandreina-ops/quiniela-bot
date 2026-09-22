@@ -826,7 +826,8 @@ def predecir_loteria_secuencia(loteria, df):
     b1_prev = None
     for _, row in ldf.iterrows():
         if b1_prev is not None:
-            seq[b1_prev][int(row["b1"])] += 1
+            siguiente = int(row["b1"])
+            seq[b1_prev][min(siguiente, inverso(siguiente))] += 1
         b1_prev = int(row["b1"])
 
     if ultimo not in seq:
