@@ -34,7 +34,6 @@ METHOD, NUMBERS, LOTERIA = range(3)
 KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
     [InlineKeyboardButton("\U0001f50d B2/B3", callback_data="b2b3_menu")],
-    [InlineKeyboardButton("\U0001f502 2DA Y 3RA AYER", callback_data="repeticiones_2da_3ra")],
     [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
     [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({hoy_dr().day}/{hoy_dr().month})", callback_data="super_pale")],
     [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
@@ -42,11 +41,17 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
     [InlineKeyboardButton("POWERBALL", callback_data="powerball")],
 ])
-B2B3_KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("\U0001f4c5 B2/B3 de hoy", callback_data="b2b3_hoy")],
-    [InlineKeyboardButton("\U0001f4c6 B2/B3 de ayer", callback_data="b2b3_ayer")],
-    [InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")],
-])
+def teclado_b2b3():
+    """Submenu B2/B3 con las fechas reales de hoy y ayer."""
+    hoy = hoy_dr()
+    ayer = hoy - timedelta(days=1)
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"📅 B2/B3 de HOY {hoy.day}/{hoy.month} (lo que ya salio)", callback_data="b2b3_hoy")],
+        [InlineKeyboardButton(f"📄 B2/B3 de AYER {ayer.day}/{ayer.month}", callback_data="b2b3_ayer")],
+        [InlineKeyboardButton("🔙 Atras", callback_data="atras")],
+    ])
+
+
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
 POWERBALL_KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("METODO 1 - DESDE ULTIMO SORTEO", callback_data="powerball_metodo1")],
@@ -223,8 +228,8 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return METHOD
     elif query.data == "b2b3_menu":
         await query.edit_message_text(
-            "\U0001f50d *B2/B3*\nElige que resultados quieres analizar:",
-            reply_markup=B2B3_KEYBOARD,
+            "\U0001f50d *B2/B3*\nElige que resultados quieres ver:",
+            reply_markup=teclado_b2b3(),
             parse_mode="Markdown",
         )
         return METHOD
@@ -236,11 +241,11 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"\U0001f50d *B2/B3 DE {etiqueta}*\nAnalizando resultados disponibles..."
         )
         try:
-            top10, total_sorteos, total_nums = await asyncio.to_thread(
-                b2b3_frecuentes_fecha, context.bot_data["df"], fecha
+            top, total_sorteos, total_nums = await asyncio.to_thread(
+                b2b3_frecuentes_fecha, context.bot_data["df"], fecha, todos=es_hoy
             )
             texto = formatear_b2b3_fecha(
-                top10, fecha, total_sorteos, total_nums, es_hoy
+                top, fecha, total_sorteos, total_nums, es_hoy
             )
         except Exception as e:
             logger.error("Error en B2/B3 de %s: %s", etiqueta, e, exc_info=True)
@@ -248,7 +253,7 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             texto,
             parse_mode="Markdown",
-            reply_markup=B2B3_KEYBOARD,
+            reply_markup=teclado_b2b3(),
         )
         return METHOD
     elif query.data == "b2b3auto":
@@ -299,13 +304,6 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         df = context.bot_data["df"]
         top10, ayer = await asyncio.to_thread(repeticiones_ayer, df)
         texto = formatear_repeticiones_ayer(top10, ayer)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
-    elif query.data == "repeticiones_2da_3ra":
-        await query.edit_message_text("\U0001f502 Buscando 2da y 3ra bola de AYER...")
-        df = context.bot_data["df"]
-        top10, ayer = await asyncio.to_thread(repeticiones_2da_3ra_ayer, df)
-        texto = formatear_2da_3ra_ayer(top10, ayer)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
         return METHOD
     elif query.data == "super_pale":
@@ -514,11 +512,16 @@ def formatear_b2b3_freq(top10):
 
 
 def formatear_b2b3_fecha(top10, fecha, total_sorteos, total_nums, es_hoy):
-    etiqueta = "HOY" if es_hoy else "AYER"
+    if es_hoy:
+        titulo = f"\U0001f50d *B2/B3 QUE YA SALIERON HOY ({fecha.strftime('%d/%m/%Y')})*"
+        detalle = "Solo sorteos de hoy ya publicados"
+    else:
+        titulo = f"\U0001f50d *B2/B3 DE AYER ({fecha.strftime('%d/%m/%Y')})*"
+        detalle = "Top 10 mas repetidos (solo B2 y B3; B1 excluido)"
     lineas = [
-        f"\U0001f50d *B2/B3 DE {etiqueta} ({fecha.strftime('%d/%m/%Y')})*",
-        "Solo B2 y B3; B1 excluido",
-        "03/30 se cuenta como un solo numero",
+        titulo,
+        detalle,
+        "03/30 se cuenta como un solo numero | el 0 (premio que no salio) no cuenta",
         f"Sorteos analizados: {total_sorteos} | B2/B3 contados: {total_nums}",
         "",
     ]
@@ -533,8 +536,7 @@ def formatear_b2b3_fecha(top10, fecha, total_sorteos, total_nums, es_hoy):
     lineas.append("`" + "-" * 27 + "`")
     for i, (num, cnt) in enumerate(top10, 1):
         pct = cnt / total_nums * 100 if total_nums else 0
-        inv = inv_of(num)
-        par_str = f"{num:02d}/{inv:02d}"
+        par_str = f"{num:02d}/{inv_of(num):02d}"
         lineas.append(f"`{i:<2}{S} {par_str:<7}{S} {cnt:<5}{S} {pct:.0f}%`")
     lineas.append("")
     nums = [f"{n:02d}/{inv_of(n):02d}" for n, _ in top10]

@@ -1043,7 +1043,14 @@ def b2b3_frecuentes(df, top=10):
     return counter.most_common(top)
 
 
-def b2b3_frecuentes_fecha(df, fecha, top=10):
+def b2b3_frecuentes_fecha(df, fecha, top=10, todos=False):
+    """
+    Frecuencia de B2 y B3 (sin B1) de una fecha concreta.
+    Para HOY scrapea la pagina del dia (solo lo que ya salio) y para AYER usa el Excel.
+    El 0 se excluye: en la pagina enloteria es el valor de un premio que no salio.
+    Los inversos se agrupan con _par_key (03/30, 07/70, 24/42...).
+    Devuelve (lista de (numero, veces), sorteos analizados, numeros B2/B3 contados).
+    """
     filas = []
     if fecha == hoy_dr():
         try:
@@ -1078,7 +1085,7 @@ def b2b3_frecuentes_fecha(df, fecha, top=10):
                     numero = int(valor)
                 except (TypeError, ValueError):
                     continue
-                if 0 <= numero <= 99:
+                if 1 <= numero <= 99:
                     contador[_par_key(numero)] += 1
         return contador
 
@@ -1089,6 +1096,8 @@ def b2b3_frecuentes_fecha(df, fecha, top=10):
             filas = respaldo
             contador = contar(filas)
 
+    if todos:
+        return contador.most_common(), len(filas), sum(contador.values())
     return contador.most_common(top), len(filas), sum(contador.values())
 
 
