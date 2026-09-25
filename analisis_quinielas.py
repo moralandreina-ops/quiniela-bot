@@ -1043,6 +1043,55 @@ def b2b3_frecuentes(df, top=10):
     return counter.most_common(top)
 
 
+def b2b3_frecuentes_fecha(df, fecha, top=10):
+    filas = []
+    if fecha == hoy_dr():
+        try:
+            from actualizar_datos import scrapear_fecha_completa
+            filas = scrapear_fecha_completa(fecha)
+        except Exception:
+            filas = []
+
+    if not filas:
+        filas = df[df["fecha"] == fecha].to_dict("records")
+
+    if not filas:
+        try:
+            from actualizar_datos import scrapear_fecha_completa
+            filas = scrapear_fecha_completa(fecha)
+        except Exception:
+            filas = []
+
+    def contar(registros):
+        contador = Counter()
+        for registro in registros:
+            for campo in ("b2", "b3"):
+                valor = registro.get(campo)
+                if valor is None:
+                    continue
+                try:
+                    if pd.isna(valor):
+                        continue
+                except (TypeError, ValueError):
+                    pass
+                try:
+                    numero = int(valor)
+                except (TypeError, ValueError):
+                    continue
+                if 0 <= numero <= 99:
+                    contador[_par_key(numero)] += 1
+        return contador
+
+    contador = contar(filas)
+    if not contador and fecha == hoy_dr():
+        respaldo = df[df["fecha"] == fecha].to_dict("records")
+        if respaldo:
+            filas = respaldo
+            contador = contar(filas)
+
+    return contador.most_common(top), len(filas), sum(contador.values())
+
+
 _kino_actualizado_hoy = None
 
 def actualizar_kino():
@@ -1230,6 +1279,178 @@ def aciertos_prediccion_ayer():
 
     detalles = [(nombre, len(set(combo) & set(sorteo)), combo) for nombre, combo in sorted(preds.items())]
     return ayer, sorteo, detalles
+
+
+POWERBALL_API = "https://data.ny.gov/resource/d6yy-54nr.json"
+POWERBALL_WHITE_MAX = 69
+POWERBALL_RED_MAX = 26
+POWERBALL_WHITE_COUNT = 5
+
+_powerball_actualizado_hoy = None
+
+
+def _parse_powerball(texto):
+    """'05 15 26 29 30 14' -> (fecha, ([5,15,26,29,30], 14)). None si el formato no cuadra."""
+    partes = texto.split()
+    if len(partes) != POWERBALL_WHITE_COUNT + 1:
+        return None
+    try:
+        numeros = [int(p) for p in partes]
+    except ValueError:
+        return None
+    blancos, rojo = numeros[:POWERBALL_WHITE_COUNT], numeros[POWERBALL_WHITE_COUNT]
+    if not all(1 <= n <= POWERBALL_WHITE_MAX for n in blancos) or len(set(blancos)) != POWERBALL_WHITE_COUNT:
+        return None
+    if not 1 <= rojo <= POWERBALL_RED_MAX:
+        return None
+    return (sorted(blancos), rojo)
+
+
+def actualizar_powerball(minimo=1500):
+    """
+    Descarga el historial de Powerball desde data.ny.gov (New York Open Data) y lo guarda en
+    powerball_results.csv. Max 1 descarga por dia; si el CSV ya tiene historial suficiente solo
+    refresca el último sorteo. Devuelve cuantos sorteos nuevos se agregaron.
+    """
+    global _powerball_actualizado_hoy
+    hoy = hoy_dr()
+    if _powerball_actualizado_hoy == hoy:
+        return 0
+
+    import csv
+    _script_dir_local = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(_script_dir_local, "powerball_results.csv")
+
+    sorteos = {}
+    if os.path.exists(csv_path):
+        with open(csv_path, "r", encoding="utf-8") as f:
+            for row in csv.reader(f):
+                if len(row) == POWERBALL_WHITE_COUNT + 2 and row[0] != "Fecha":
+                    try:
+                        d = date.fromisoformat(row[0])
+                        blancos = [int(x) for x in row[1:POWERBALL_WHITE_COUNT + 1]]
+                        rojo = int(row[POWERBALL_WHITE_COUNT + 1])
+                    except ValueError:
+                        continue
+                    sorteos[d] = (sorted(blancos), rojo)
+
+    if len(sorteos) >= minimo:
+        _powerball_actualizado_hoy = hoy
+        return 0
+
+    try:
+        resp = _sesion().get(
+            POWERBALL_API,
+            params={"$limit": 5000, "$order": "draw_date ASC"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            return 0
+        registros = resp.json()
+    except Exception:
+        return 0
+
+    nuevos = 0
+    for registro in registros:
+        d = date.fromisoformat(registro["draw_date"][:10])
+        parseado = _parse_powerball(registro.get("winning_numbers", ""))
+        if parseado is None or d in sorteos:
+            continue
+        sorteos[d] = parseado
+        nuevos += 1
+
+    if nuevos:
+        with open(csv_path, "w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["Fecha", "B1", "B2", "B3", "B4", "B5", "Powerball"])
+            for d in sorted(sorteos):
+                blancos, rojo = sorteos[d]
+                w.writerow([d.isoformat()] + blancos + [rojo])
+
+    _powerball_actualizado_hoy = hoy
+    return nuevos
+
+
+def cargar_powerball():
+    """Historial de Powerball como [(fecha, (blancos, rojo)), ...] del mas antiguo al mas reciente."""
+    import csv
+    _script_dir_local = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(_script_dir_local, "powerball_results.csv")
+    if not os.path.exists(csv_path):
+        return []
+
+    sorteos = {}
+    with open(csv_path, "r", encoding="utf-8") as f:
+        for row in csv.reader(f):
+            if len(row) == POWERBALL_WHITE_COUNT + 2 and row[0] != "Fecha":
+                try:
+                    d = date.fromisoformat(row[0])
+                    blancos = [int(x) for x in row[1:POWERBALL_WHITE_COUNT + 1]]
+                    rojo = int(row[POWERBALL_WHITE_COUNT + 1])
+                except ValueError:
+                    continue
+                sorteos[d] = (sorted(blancos), rojo)
+
+    return [(d, sorteos[d]) for d in sorted(sorteos)]
+
+
+def predecir_powerball_desde_ultimo(ventana=5, minimo_muestras=20, historial=None):
+    """
+    Predice el siguiente sorteo de Powerball usando el ULTIMO sorteo como base.
+    Busca en el historial los sorteos que comparten numeros con el ultimo (la combinacion
+    exacta es imposible en 69 bolas) y cuenta que numeros salieron en los `ventana` sorteos
+    siguientes de cada coincidencia, ponderado por cuantos numeros comparten.
+    Devuelve dict con base, blancos, rojo, muestras, ventana, sorteos o None si no hay datos.
+    """
+    if historial is None:
+        historial = cargar_powerball()
+    if len(historial) < minimo_muestras + ventana + 1:
+        return None
+
+    fechas = [d for d, _ in historial]
+    ultimo = historial[-1][1]
+    base_set = set(ultimo[0])
+
+    contador_blancos = Counter()
+    contador_rojos = Counter()
+    muestras = 0
+    maximo = len(historial) - ventana - 1
+
+    for indice in range(maximo):
+        blancos, _ = historial[indice][1]
+        comunes = len(base_set & set(blancos))
+        if comunes == 0:
+            continue
+        muestras += 1
+        for _, (siguientes, rojo) in historial[indice + 1:indice + 1 + ventana]:
+            for n in siguientes:
+                contador_blancos[n] += comunes
+            contador_rojos[rojo] += comunes
+
+    if not contador_blancos:
+        return None
+
+    blancos = tuple(sorted(n for n, _ in contador_blancos.most_common(POWERBALL_WHITE_COUNT)))
+    if len(blancos) < POWERBALL_WHITE_COUNT:
+        return None
+
+    if contador_rojos:
+        rojo = contador_rojos.most_common(1)[0][0]
+    else:
+        recientes = [r for _, (_, r) in historial[-60:]]
+        rojo = Counter(recientes).most_common(1)[0][0]
+
+    return {
+        "base_fecha": fechas[-1],
+        "base_blancos": ultimo[0],
+        "base_rojo": ultimo[1],
+        "blancos": blancos,
+        "rojo": rojo,
+        "muestras": muestras,
+        "ventana": ventana,
+        "sorteos": len(historial),
+    }
 
 
 def menu():

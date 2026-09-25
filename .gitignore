@@ -8,3 +8,6 @@ __pycache__/
 
 # Excel temp files
 ~$*.xlsx
+
+# Historial Powerball (se descarga en runtime)
+powerball_results.csv

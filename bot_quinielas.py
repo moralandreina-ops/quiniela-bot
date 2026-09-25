@@ -21,7 +21,7 @@ import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, b2b3_frecuentes, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer, cruzar_secuencias_lotseq, b1_ayer_loteria, transformar_reverso
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, b2b3_frecuentes, b2b3_frecuentes_fecha, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer, cruzar_secuencias_lotseq, b1_ayer_loteria, transformar_reverso, actualizar_powerball, predecir_powerball_desde_ultimo
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,6 +33,7 @@ METHOD, NUMBERS, LOTERIA = range(3)
 
 KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
+    [InlineKeyboardButton("\U0001f50d B2/B3", callback_data="b2b3_menu")],
     [InlineKeyboardButton("\U0001f502 2DA Y 3RA AYER", callback_data="repeticiones_2da_3ra")],
     [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
     [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({hoy_dr().day}/{hoy_dr().month})", callback_data="super_pale")],
@@ -41,9 +42,14 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
     [InlineKeyboardButton("POWERBALL", callback_data="powerball")],
 ])
+B2B3_KEYBOARD = InlineKeyboardMarkup([
+    [InlineKeyboardButton("\U0001f4c5 B2/B3 de hoy", callback_data="b2b3_hoy")],
+    [InlineKeyboardButton("\U0001f4c6 B2/B3 de ayer", callback_data="b2b3_ayer")],
+    [InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")],
+])
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
 POWERBALL_KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("METODO 1 - MUESTRA SEGURA", callback_data="powerball_metodo1")],
+    [InlineKeyboardButton("METODO 1 - DESDE ULTIMO SORTEO", callback_data="powerball_metodo1")],
     [InlineKeyboardButton("METODO 2 - BARAJADO", callback_data="powerball_metodo2")],
     [InlineKeyboardButton("Atras", callback_data="atras")],
 ])
@@ -68,20 +74,32 @@ def generar_powerball_metodo2():
     return tuple(sorted(blancos[:POWERBALL_WHITE_COUNT])), secrets.randbelow(POWERBALL_RED_MAX) + 1
 
 
-def formatear_powerball(blancos, rojo, metodo):
+def formatear_powerball(blancos, rojo, metodo, base=None):
     nombres = {
-        1: "MUESTRA SEGURA",
+        1: "DESDE EL ULTIMO SORTEO" if base else "ALEATORIO (sin datos del ultimo sorteo)",
         2: "BARAJADO UNIFORME",
     }
     lineas = [
         "POWERBALL",
         f"*Metodo {metodo}: {nombres[metodo]}*",
         "",
+    ]
+    if base:
+        base_txt = " ".join(f"{n:02d}" for n in base["base_blancos"])
+        lineas += [
+            f"Base (ultimo sorteo {base['base_fecha'].strftime('%d/%m/%Y')}): `{base_txt}` + `{base['base_rojo']:02d}`",
+            f"Coincidencias historicas: {base['muestras']} sorteos (ventana {base['ventana']})",
+            "",
+        ]
+    lineas += [
         f"Blancos: `{' '.join(f'{numero:02d}' for numero in blancos)}`",
         f"Powerball: `{rojo:02d}`",
         "",
-        "Los dos metodos son aleatorios y no mejoran la probabilidad del sorteo.",
     ]
+    if metodo == 1 and base:
+        lineas.append("El metodo 1 usa el ultimo sorteo como base, pero el sorteo es independiente: no mejora la probabilidad real.")
+    else:
+        lineas.append("Este metodo es aleatorio y no mejora la probabilidad del sorteo.")
     return "\n".join(lineas)
 
 
@@ -161,18 +179,29 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return METHOD
     elif query.data == "powerball":
         await query.edit_message_text(
-            "POWERBALL\nElige uno de los dos metodos. Ambos generan una combinacion aleatoria valida:",
+            "POWERBALL\n*Metodo 1* usa el ultimo sorteo como base para predecir.\n*Metodo 2* es barajado aleatorio.",
             reply_markup=POWERBALL_KEYBOARD,
         )
         return METHOD
     elif query.data in ("powerball_metodo1", "powerball_metodo2"):
         metodo = 1 if query.data == "powerball_metodo1" else 2
+        base = None
         if metodo == 1:
-            blancos, rojo = generar_powerball_metodo1()
+            await query.edit_message_text("POWERBALL\nBuscando el ultimo sorteo...")
+            try:
+                await asyncio.to_thread(actualizar_powerball)
+                base = await asyncio.to_thread(predecir_powerball_desde_ultimo)
+            except Exception:
+                logger.exception("Powerball: fallo el metodo 1")
+                base = None
+            if base:
+                blancos, rojo = base["blancos"], base["rojo"]
+            else:
+                blancos, rojo = generar_powerball_metodo1()
         else:
             blancos, rojo = generar_powerball_metodo2()
         await query.edit_message_text(
-            formatear_powerball(blancos, rojo, metodo),
+            formatear_powerball(blancos, rojo, metodo, base),
             parse_mode="Markdown",
             reply_markup=POWERBALL_KEYBOARD,
         )
@@ -191,6 +220,36 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         atrasados, salidos, total = numeros_atrasados(df)
         texto = formatear_atrasados(atrasados, salidos, total)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "b2b3_menu":
+        await query.edit_message_text(
+            "\U0001f50d *B2/B3*\nElige que resultados quieres analizar:",
+            reply_markup=B2B3_KEYBOARD,
+            parse_mode="Markdown",
+        )
+        return METHOD
+    elif query.data in ("b2b3_hoy", "b2b3_ayer"):
+        es_hoy = query.data == "b2b3_hoy"
+        fecha = hoy_dr() if es_hoy else hoy_dr() - timedelta(days=1)
+        etiqueta = "HOY" if es_hoy else "AYER"
+        await query.edit_message_text(
+            f"\U0001f50d *B2/B3 DE {etiqueta}*\nAnalizando resultados disponibles..."
+        )
+        try:
+            top10, total_sorteos, total_nums = await asyncio.to_thread(
+                b2b3_frecuentes_fecha, context.bot_data["df"], fecha
+            )
+            texto = formatear_b2b3_fecha(
+                top10, fecha, total_sorteos, total_nums, es_hoy
+            )
+        except Exception as e:
+            logger.error("Error en B2/B3 de %s: %s", etiqueta, e, exc_info=True)
+            texto = f"Error al obtener B2/B3 de {etiqueta.lower()}. Intenta mas tarde."
+        await query.edit_message_text(
+            texto,
+            parse_mode="Markdown",
+            reply_markup=B2B3_KEYBOARD,
+        )
         return METHOD
     elif query.data == "b2b3auto":
         await query.edit_message_text("\U0001f50d Buscando ultimo B1 del dia...")
@@ -454,8 +513,38 @@ def formatear_b2b3_freq(top10):
     return "\n".join(lineas)
 
 
+def formatear_b2b3_fecha(top10, fecha, total_sorteos, total_nums, es_hoy):
+    etiqueta = "HOY" if es_hoy else "AYER"
+    lineas = [
+        f"\U0001f50d *B2/B3 DE {etiqueta} ({fecha.strftime('%d/%m/%Y')})*",
+        "Solo B2 y B3; B1 excluido",
+        "03/30 se cuenta como un solo numero",
+        f"Sorteos analizados: {total_sorteos} | B2/B3 contados: {total_nums}",
+        "",
+    ]
+    if not top10:
+        if es_hoy:
+            lineas.append("Todavia no hay B2/B3 disponibles de hoy.")
+        else:
+            lineas.append("No hay datos de B2/B3 de ayer.")
+        return "\n".join(lineas)
+
+    lineas.append(f"`# {S} NUM {S} VECES {S}  %`")
+    lineas.append("`" + "-" * 27 + "`")
+    for i, (num, cnt) in enumerate(top10, 1):
+        pct = cnt / total_nums * 100 if total_nums else 0
+        inv = inv_of(num)
+        par_str = f"{num:02d}/{inv:02d}"
+        lineas.append(f"`{i:<2}{S} {par_str:<7}{S} {cnt:<5}{S} {pct:.0f}%`")
+    lineas.append("")
+    nums = [f"{n:02d}/{inv_of(n):02d}" for n, _ in top10]
+    lineas.append(f"*Pool:* {', '.join(nums)}")
+    return "\n".join(lineas)
+
+
 def inv_of(n):
     return (n % 10) * 10 + n // 10
+
 
 def formatear_anguila(numeros, df):
     ang = df[df["loteria"].str.contains("Anguilla", case=False, na=False)].copy()
