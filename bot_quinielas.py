@@ -11,6 +11,7 @@ Uso:
 import logging
 import asyncio
 import re
+import secrets
 from collections import Counter, defaultdict
 from datetime import timedelta
 from io import StringIO
@@ -38,8 +39,51 @@ KEYBOARD = InlineKeyboardMarkup([
     [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
     [InlineKeyboardButton("\U0001f3af SECUENCIAS x LOTSEQ", callback_data="secuencias")],
     [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
+    [InlineKeyboardButton("POWERBALL", callback_data="powerball")],
 ])
 ATRAS = InlineKeyboardMarkup([[InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")]])
+POWERBALL_KEYBOARD = InlineKeyboardMarkup([
+    [InlineKeyboardButton("METODO 1 - MUESTRA SEGURA", callback_data="powerball_metodo1")],
+    [InlineKeyboardButton("METODO 2 - BARAJADO", callback_data="powerball_metodo2")],
+    [InlineKeyboardButton("Atras", callback_data="atras")],
+])
+
+POWERBALL_WHITE_MAX = 69
+POWERBALL_RED_MAX = 26
+POWERBALL_WHITE_COUNT = 5
+
+
+def generar_powerball_metodo1():
+    rng = secrets.SystemRandom()
+    blancos = tuple(sorted(rng.sample(range(1, POWERBALL_WHITE_MAX + 1), POWERBALL_WHITE_COUNT)))
+    rojo = rng.randint(1, POWERBALL_RED_MAX)
+    return blancos, rojo
+
+
+def generar_powerball_metodo2():
+    blancos = list(range(1, POWERBALL_WHITE_MAX + 1))
+    for indice in range(len(blancos) - 1, 0, -1):
+        otro = secrets.randbelow(indice + 1)
+        blancos[indice], blancos[otro] = blancos[otro], blancos[indice]
+    return tuple(sorted(blancos[:POWERBALL_WHITE_COUNT])), secrets.randbelow(POWERBALL_RED_MAX) + 1
+
+
+def formatear_powerball(blancos, rojo, metodo):
+    nombres = {
+        1: "MUESTRA SEGURA",
+        2: "BARAJADO UNIFORME",
+    }
+    lineas = [
+        "POWERBALL",
+        f"*Metodo {metodo}: {nombres[metodo]}*",
+        "",
+        f"Blancos: `{' '.join(f'{numero:02d}' for numero in blancos)}`",
+        f"Powerball: `{rojo:02d}`",
+        "",
+        "Los dos metodos son aleatorios y no mejoran la probabilidad del sorteo.",
+    ]
+    return "\n".join(lineas)
+
 
 def cargar_token():
     import os
@@ -114,6 +158,24 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.exception("Kino TV: error calculando aciertos de ayer")
         texto = formatear_super_kino(combo1, combo2, combo3, total, f1, f2, aciertos_info)
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        return METHOD
+    elif query.data == "powerball":
+        await query.edit_message_text(
+            "POWERBALL\nElige uno de los dos metodos. Ambos generan una combinacion aleatoria valida:",
+            reply_markup=POWERBALL_KEYBOARD,
+        )
+        return METHOD
+    elif query.data in ("powerball_metodo1", "powerball_metodo2"):
+        metodo = 1 if query.data == "powerball_metodo1" else 2
+        if metodo == 1:
+            blancos, rojo = generar_powerball_metodo1()
+        else:
+            blancos, rojo = generar_powerball_metodo2()
+        await query.edit_message_text(
+            formatear_powerball(blancos, rojo, metodo),
+            parse_mode="Markdown",
+            reply_markup=POWERBALL_KEYBOARD,
+        )
         return METHOD
     elif query.data == "pares":
         df = context.bot_data["df"]
