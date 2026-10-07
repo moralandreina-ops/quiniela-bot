@@ -10,18 +10,16 @@ Uso:
 
 import logging
 import asyncio
-import re
 import secrets
-from collections import Counter, defaultdict
 from datetime import timedelta
-from io import StringIO
 import os
 import sys
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, analizar, scrapear_fecha, analizar_decenas, cargar_secuencias, analizar_secuencias, predecir_anguila_siguiente, anguila_horarios_ordenados, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, repeticiones_hoy, repeticiones_ayer, repeticiones_2da_3ra_ayer, b2b3_frecuentes, b2b3_frecuentes_fecha, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer, cruzar_secuencias_lotseq, b1_ayer_loteria, transformar_reverso, actualizar_powerball, predecir_powerball_desde_ultimo
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, cargar_secuencias, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, b2b3_frecuentes_fecha, b1s_de_fecha, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer, cruzar_secuencias_lotseq, b1_ayer_loteria, transformar_reverso, actualizar_powerball, predecir_powerball_desde_ultimo
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,16 +29,19 @@ RUTA_SECUENCIAS = os.path.join(_script_dir, "03-10-25-05-66-00.txt")
 
 METHOD, NUMBERS, LOTERIA = range(3)
 
-KEYBOARD = InlineKeyboardMarkup([
-    [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
-    [InlineKeyboardButton("\U0001f50d B2/B3", callback_data="b2b3_menu")],
-    [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
-    [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({hoy_dr().day}/{hoy_dr().month})", callback_data="super_pale")],
-    [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
-    [InlineKeyboardButton("\U0001f3af SECUENCIAS x LOTSEQ", callback_data="secuencias")],
-    [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
-    [InlineKeyboardButton("POWERBALL", callback_data="powerball")],
-])
+def teclado_principal():
+    """Menu principal. Se construye en cada llamada para que la fecha del boton SUPER PALE sea siempre la de hoy."""
+    hoy = hoy_dr()
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
+        [InlineKeyboardButton("\U0001f50d B2/B3", callback_data="b2b3_menu")],
+        [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
+        [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({hoy.day}/{hoy.month})", callback_data="super_pale")],
+        [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
+        [InlineKeyboardButton("\U0001f3af SECUENCIAS x LOTSEQ", callback_data="secuencias")],
+        [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
+        [InlineKeyboardButton("POWERBALL", callback_data="powerball")],
+    ])
 def teclado_b2b3():
     """Submenu B2/B3 con las fechas reales de hoy y ayer."""
     hoy = hoy_dr()
@@ -119,16 +120,50 @@ def cargar_token():
     except FileNotFoundError:
         return None
 
+async def _editar(query, texto, reply_markup=None, parse_mode=None):
+    """edit_message_text que nunca rompe el flujo del boton.
+
+    - Si el texto es identico al del mensaje, Telegram lanza "Message is not
+      modified": se ignora (el mensaje ya muestra ese resultado).
+    - Si falla el parseo Markdown u otro BadRequest, reintenta en texto plano.
+    """
+    try:
+        await query.edit_message_text(texto, reply_markup=reply_markup, parse_mode=parse_mode)
+    except BadRequest as e:
+        if "not modified" in str(e).lower():
+            return
+        logger.warning("edit_message_text fallo (%s); reintentando sin formato", e)
+        try:
+            await query.edit_message_text(texto, reply_markup=reply_markup)
+        except BadRequest as e2:
+            if "not modified" not in str(e2).lower():
+                logger.error("edit_message_text fallo de nuevo: %s", e2)
+
+
+async def _responder(message, texto, reply_markup=None, parse_mode=None):
+    """reply_text que nunca rompe el flujo: si el parseo Markdown falla, reintenta en texto plano."""
+    try:
+        await message.reply_text(texto, reply_markup=reply_markup, parse_mode=parse_mode)
+    except BadRequest as e:
+        logger.warning("reply_text fallo (%s); reintentando sin formato", e)
+        try:
+            await message.reply_text(texto, reply_markup=reply_markup)
+        except BadRequest as e2:
+            logger.error("reply_text fallo de nuevo: %s", e2)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
+    await _responder(
+        update.message,
         "\U0001f3b0 *HOLA PREPARADO PARA GANAR?*\nSelecciona un metodo:",
-        reply_markup=KEYBOARD, parse_mode="Markdown"
+        reply_markup=teclado_principal(), parse_mode="Markdown"
     )
     return METHOD
 
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Selecciona un metodo:", reply_markup=KEYBOARD
+    await _responder(
+        update.message,
+        "Selecciona un metodo:", reply_markup=teclado_principal()
     )
     return METHOD
 
@@ -137,36 +172,27 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     if not query.data.startswith("loteria_select:"):
         context.user_data["metodo"] = query.data
-    if query.data == "auto":
-        await query.edit_message_text("\U0001f4e1 Ejecutando metodo automatico del dia...\nScrapeando resultados de hoy...")
-        pool = await asyncio.to_thread(scrapear_hoy)
-        if not pool:
-            await query.edit_message_text("No se pudieron obtener resultados de hoy.\n\nIntenta mas tarde o usa otro metodo.", reply_markup=KEYBOARD)
-            return METHOD
-        df = context.bot_data["df"]
-        b1_a_fechas = context.bot_data["b1_a_fechas"]
-        texto = formatear_prediccion(pool, b1_a_fechas, df)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+    try:
+        return await _atender_boton(query, context)
+    except Exception as e:
+        logger.error("Error en el boton %s: %s", query.data, e, exc_info=True)
+        try:
+            await _editar(query, "Ocurrio un error al procesar este boton. Intenta de nuevo.", reply_markup=teclado_principal())
+        except Exception:
+            logger.exception("No se pudo informar el error en el mensaje")
         return METHOD
-    elif query.data == "decenas":
-        ayer = hoy_dr() - timedelta(days=1)
-        await query.edit_message_text(f"\U0001f4c5 Buscando resultados de {ayer}...")
-        pool = await asyncio.to_thread(scrapear_fecha, ayer)
-        if not pool:
-            await query.edit_message_text(f"No se encontraron resultados de {ayer}.\n\nIntenta con otro metodo.", reply_markup=KEYBOARD)
-            return METHOD
-        texto = formatear_decenas(pool)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
-    elif query.data == "super_kino":
-        await query.edit_message_text("\U0001f3c6 Actualizando datos Kino TV...")
+
+
+async def _atender_boton(query, context: ContextTypes.DEFAULT_TYPE):
+    if query.data == "super_kino":
+        await _editar(query, "\U0001f3c6 Actualizando datos Kino TV...")
         try:
             n_kino = await asyncio.to_thread(actualizar_kino)
             if n_kino:
                 logger.info("Kino TV: %d sorteos nuevos", n_kino)
         except Exception:
             pass
-        await query.edit_message_text("\U0001f3c6 Generando combinaciones Super Kino TV...")
+        await _editar(query, "\U0001f3c6 Generando combinaciones Super Kino TV...")
         combo1, combo2, combo3, total, f1, f2 = await asyncio.to_thread(metodo_super_kino)
         try:
             guardada = await asyncio.to_thread(guardar_prediccion_kino, combo1, combo2, combo3)
@@ -180,19 +206,21 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             logger.exception("Kino TV: error calculando aciertos de ayer")
         texto = formatear_super_kino(combo1, combo2, combo3, total, f1, f2, aciertos_info)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        await _editar(query, texto, parse_mode="Markdown", reply_markup=teclado_principal())
         return METHOD
     elif query.data == "powerball":
-        await query.edit_message_text(
+        await _editar(
+            query,
             "POWERBALL\n*Metodo 1* usa el ultimo sorteo como base para predecir.\n*Metodo 2* es barajado aleatorio.",
             reply_markup=POWERBALL_KEYBOARD,
+            parse_mode="Markdown",
         )
         return METHOD
     elif query.data in ("powerball_metodo1", "powerball_metodo2"):
         metodo = 1 if query.data == "powerball_metodo1" else 2
         base = None
         if metodo == 1:
-            await query.edit_message_text("POWERBALL\nBuscando el ultimo sorteo...")
+            await _editar(query, "POWERBALL\nBuscando el ultimo sorteo...")
             try:
                 await asyncio.to_thread(actualizar_powerball)
                 base = await asyncio.to_thread(predecir_powerball_desde_ultimo)
@@ -205,29 +233,19 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 blancos, rojo = generar_powerball_metodo1()
         else:
             blancos, rojo = generar_powerball_metodo2()
-        await query.edit_message_text(
+        await _editar(
+            query,
             formatear_powerball(blancos, rojo, metodo, base),
             parse_mode="Markdown",
             reply_markup=POWERBALL_KEYBOARD,
         )
         return METHOD
-    elif query.data == "pares":
-        df = context.bot_data["df"]
-        texto = formatear_pares(df)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
     elif query.data == "secuencias":
-        await query.edit_message_text("Escribe el nombre de la loteria que quieres cruzar con las secuencias:\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Leidsa*, *Real*, *Gana Mas*, *Anguilla 9AM*...\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *leidsa*, *quemaito*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
+        await _editar(query, "Escribe el nombre de la loteria que quieres cruzar con las secuencias:\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Leidsa*, *Real*, *Gana Mas*, *Anguilla 9AM*...\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *leidsa*, *quemaito*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
         return LOTERIA
-    elif query.data == "atrasados":
-        await query.edit_message_text("\U0001f504 Buscando numeros atrasados 7 dias...")
-        df = context.bot_data["df"]
-        atrasados, salidos, total = numeros_atrasados(df)
-        texto = formatear_atrasados(atrasados, salidos, total)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
     elif query.data == "b2b3_menu":
-        await query.edit_message_text(
+        await _editar(
+            query,
             "\U0001f50d *B2/B3*\nElige que resultados quieres ver:",
             reply_markup=teclado_b2b3(),
             parse_mode="Markdown",
@@ -237,95 +255,64 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         es_hoy = query.data == "b2b3_hoy"
         fecha = hoy_dr() if es_hoy else hoy_dr() - timedelta(days=1)
         etiqueta = "HOY" if es_hoy else "AYER"
-        await query.edit_message_text(
-            f"\U0001f50d *B2/B3 DE {etiqueta}*\nAnalizando resultados disponibles..."
+        await _editar(
+            query,
+            f"\U0001f50d *B2/B3 DE {etiqueta}*\nAnalizando resultados disponibles...",
         )
         try:
+            df = context.bot_data["df"]
             top, total_sorteos, total_nums = await asyncio.to_thread(
-                b2b3_frecuentes_fecha, context.bot_data["df"], fecha, todos=es_hoy
+                b2b3_frecuentes_fecha, df, fecha, todos=es_hoy
             )
+            b1s = set() if es_hoy else await asyncio.to_thread(b1s_de_fecha, df, fecha)
             texto = formatear_b2b3_fecha(
-                top, fecha, total_sorteos, total_nums, es_hoy
+                top, fecha, total_sorteos, total_nums, es_hoy, b1s
             )
         except Exception as e:
             logger.error("Error en B2/B3 de %s: %s", etiqueta, e, exc_info=True)
             texto = f"Error al obtener B2/B3 de {etiqueta.lower()}. Intenta mas tarde."
-        await query.edit_message_text(
+        await _editar(
+            query,
             texto,
             parse_mode="Markdown",
             reply_markup=teclado_b2b3(),
         )
         return METHOD
-    elif query.data == "b2b3auto":
-        await query.edit_message_text("\U0001f50d Buscando ultimo B1 del dia...")
-        pool = await asyncio.to_thread(scrapear_hoy)
-        if pool:
-            ultimo = [pool[-1]]
-            df = context.bot_data["df"]
-            b1_a_fechas = context.bot_data["b1_a_fechas"]
-            texto = formatear_b2b3(ultimo, b1_a_fechas, df)
-            await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-            return METHOD
-        await query.edit_message_text("No se pudieron obtener resultados.\n\nInserta los numeros manualmente (ej: 12 45 83):", reply_markup=ATRAS)
-        return NUMBERS
-    elif query.data == "b2b3manual":
-        await query.edit_message_text("Inserta los numeros B1 del dia separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
-        return NUMBERS
     elif query.data == "anguila":
-        await query.edit_message_text("\U0001f41d Buscando ultimo sorteo de Anguilla de hoy...")
+        await _editar(query, "\U0001f41d Buscando ultimo sorteo de Anguilla de hoy...")
         try:
             df = context.bot_data["df"]
             res = await asyncio.to_thread(predecir_anguila_auto, df)
             if res is None:
-                await query.edit_message_text("No hay sorteo de Anguilla de hoy aun.\n\nIntenta mas tarde.", reply_markup=KEYBOARD)
+                await _editar(query, "No hay sorteo de Anguilla de hoy aun.\n\nIntenta mas tarde.", reply_markup=teclado_principal())
                 return METHOD
             counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b = res
             texto = formatear_anguila_auto(counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b)
         except Exception as e:
             logger.error("Error en ANGUILA: %s", e, exc_info=True)
             texto = "Error interno en ANGUILA: %s\n\nIntenta mas tarde." % str(e)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
-    elif query.data == "repeticiones_hoy":
-        await query.edit_message_text("\U0001f501 Buscando resultados de hoy...")
-        df = context.bot_data["df"]
-        try:
-            repetidos, scrape = await asyncio.to_thread(repeticiones_hoy, df)
-            if not scrape:
-                texto = "No se pudieron obtener resultados de hoy.\n\nIntenta mas tarde."
-            else:
-                texto = formatear_repeticiones_hoy(repetidos, scrape)
-        except Exception as e:
-            texto = "Error al obtener resultados: %s\n\nIntenta mas tarde." % str(e)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
-        return METHOD
-    elif query.data == "repeticiones_ayer":
-        await query.edit_message_text("\U0001f504 Buscando top 10 de AYER...")
-        df = context.bot_data["df"]
-        top10, ayer = await asyncio.to_thread(repeticiones_ayer, df)
-        texto = formatear_repeticiones_ayer(top10, ayer)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        await _editar(query, texto, parse_mode="Markdown", reply_markup=teclado_principal())
         return METHOD
     elif query.data == "super_pale":
-        await query.edit_message_text("\U0001f9e7 Buscando B1s que salieron un dia como hoy...")
+        await _editar(query, "\U0001f9e7 Buscando B1s que salieron un dia como hoy...")
         df = context.bot_data["df"]
         contador, hoy, total = await asyncio.to_thread(super_pale_dia_como_hoy, df)
         if contador is None:
-            await query.edit_message_text("Sin datos para un dia como hoy.", reply_markup=KEYBOARD)
+            await _editar(query, "Sin datos para un dia como hoy.", reply_markup=teclado_principal())
             return METHOD
         texto = formatear_super_pale(contador, hoy, total)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        await _editar(query, texto, parse_mode="Markdown", reply_markup=teclado_principal())
         return METHOD
     elif query.data == "loteria":
-        await query.edit_message_text("Escribe el nombre de la loteria que quieres jugar (elige entre las 43 disponibles):\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Anguilla 9AM*, *Leidsa*, *Real*, *Gana Mas*, *Florida Tarde*, *Georgia Dia*, *Haiti Bolet 5:30 PM*, *Quemaito*\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *georgia*, *haiti*, *quemaito*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
+        await _editar(query, "Escribe el nombre de la loteria que quieres jugar (elige entre las 43 disponibles):\n\nEj: *La Primera Noche*, *Loteka*, *New York Tarde*, *Anguilla 9AM*, *Leidsa*, *Real*, *Gana Mas*, *Florida Tarde*, *Georgia Dia*, *Haiti Bolet 5:30 PM*, *Quemaito*\n\nTambien puedes buscar por palabra clave: *primera*, *noche*, *anguilla*, *georgia*, *haiti*, *quemaito*, etc.", reply_markup=ATRAS, parse_mode="Markdown")
         return LOTERIA
     elif query.data == "manual":
-        await query.edit_message_text("Inserta los numeros que han salido hoy separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
+        await _editar(query, "Inserta los numeros que han salido hoy separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
     elif query.data == "atras":
-        await query.edit_message_text("Selecciona un metodo:", reply_markup=KEYBOARD)
+        await _editar(query, "Selecciona un metodo:", reply_markup=teclado_principal())
         return METHOD
-    elif query.data and query.data.startswith("loteria_select:"):
+    elif query.data.startswith("loteria_select:"):
         nombre = query.data.split(":", 1)[1]
         if context.user_data.get("metodo") == "secuencias":
             texto = await _secuencias_lotseq(nombre, context)
@@ -333,11 +320,12 @@ async def metodo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             df = context.bot_data["df"]
             resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
             texto = formatear_loteria(resultado, nombre)
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        await _editar(query, texto, parse_mode="Markdown", reply_markup=teclado_principal())
         return METHOD
     else:
-        await query.edit_message_text("Inserta los numeros que han salido en primera el dia de hoy (ej: 12 45 83):", reply_markup=ATRAS)
-        return NUMBERS
+        logger.warning("callback_data sin boton asignado: %s", query.data)
+        await _editar(query, "Selecciona un metodo:", reply_markup=teclado_principal())
+        return METHOD
 
 async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = update.message.text.strip()
@@ -349,20 +337,18 @@ async def numeros_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         numeros = sorted({int(x) for x in entrada.split()})
         if not all(0 <= n <= 99 for n in numeros):
-            await update.message.reply_text("Solo numeros entre 0 y 99. Intenta de nuevo:")
+            await _responder(update.message, "Solo numeros entre 0 y 99. Intenta de nuevo:", reply_markup=ATRAS)
             return NUMBERS
     except ValueError:
-        await update.message.reply_text("Entrada invalida. Solo numeros separados por espacio (ej: 12 45 83):")
+        await _responder(update.message, "Entrada invalida. Solo numeros separados por espacio (ej: 12 45 83):", reply_markup=ATRAS)
         return NUMBERS
 
     if metodo == "manual":
         texto = formatear_prediccion(numeros, b1_a_fechas, df)
-    elif metodo == "b2b3manual":
-        texto = formatear_b2b3(numeros, b1_a_fechas, df)
     else:
         texto = "Metodo no reconocido."
 
-    await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+    await _responder(update.message, texto, parse_mode="Markdown", reply_markup=teclado_principal())
     return METHOD
 
 async def _secuencias_lotseq(nombre, context):
@@ -395,10 +381,11 @@ async def loteria_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     matches = await asyncio.to_thread(buscar_loterias, raw, df)
 
     if not matches:
-        await update.message.reply_text(
+        await _responder(
+            update.message,
             f"No encontre ninguna loteria con \"{raw}\".\n\n"
             "Ejemplos: La Primera Noche, Loteka, New York Tarde, Anguilla 9AM, LoteDom, Leidsa, Real",
-            reply_markup=KEYBOARD
+            reply_markup=teclado_principal()
         )
         return METHOD
 
@@ -409,7 +396,7 @@ async def loteria_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             resultado = await asyncio.to_thread(predecir_loteria_secuencia, nombre, df)
             texto = formatear_loteria(resultado, nombre)
-        await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=KEYBOARD)
+        await _responder(update.message, texto, parse_mode="Markdown", reply_markup=teclado_principal())
         return METHOD
 
     # Multiple matches - show as buttons
@@ -418,19 +405,16 @@ async def loteria_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         botones.append([InlineKeyboardButton(nombre, callback_data=f"loteria_select:{nombre}")])
     botones.append([InlineKeyboardButton("\U0001f519 Atras", callback_data="atras")])
 
-    await update.message.reply_text(
+    await _responder(
+        update.message,
         f"Encontre varias loterias con \"{raw}\". Selecciona una:",
         reply_markup=InlineKeyboardMarkup(botones)
     )
     return METHOD
 
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Menu principal:", reply_markup=KEYBOARD)
-    return ConversationHandler.END
-
 async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Menu principal:", reply_markup=KEYBOARD)
+    await _responder(update.message, "Menu principal:", reply_markup=teclado_principal())
     return METHOD
 
 S = "│"
@@ -466,28 +450,6 @@ def formatear_prediccion(numeros, b1_a_fechas, df):
         lineas.append("Sin candidatos.")
     return "\n".join(lineas)
 
-def formatear_b2b3(numeros, b1_a_fechas, df):
-    contador, fechas, problemas, mejores_pares, max_count, _ = analizar(numeros, b1_a_fechas, df)
-    lineas = [f"\U0001f50d *B1={numeros} - Acompanantes B2/B3*"]
-    if problemas:
-        lineas.append(f"Maximo coincide: {max_count}/{len(numeros)}")
-        for num, motivo in problemas:
-            lineas.append(f"  - {num}: {motivo}")
-    lineas.append(f"Analizando {len(fechas)} fechas\n")
-    if contador:
-        lineas.append(f"`# {S} NUM {S} FREC {S} ACOMP`")
-        lineas.append("`" + "-" * 30 + "`")
-        for i, (num, count) in enumerate(contador.most_common(10), 1):
-            par = ""
-            if num in mejores_pares:
-                pn, pc = mejores_pares[num]
-                par = f"+{pn}({pc})"
-            lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {par:<10}`")
-    else:
-        lineas.append("Sin acompanantes en B2/B3.")
-    return "\n".join(lineas)
-
-
 def formatear_b2b3_freq(top10):
     hoy = hoy_dr()
     lineas = [f"\U0001f50d *B2/B3 MAS FRECUENTES UN DIA COMO HOY ({hoy.day:02d})*"]
@@ -511,7 +473,7 @@ def formatear_b2b3_freq(top10):
     return "\n".join(lineas)
 
 
-def formatear_b2b3_fecha(top10, fecha, total_sorteos, total_nums, es_hoy):
+def formatear_b2b3_fecha(top10, fecha, total_sorteos, total_nums, es_hoy, b1s=None):
     if es_hoy:
         titulo = f"\U0001f50d *B2/B3 QUE YA SALIERON HOY ({fecha.strftime('%d/%m/%Y')})*"
         detalle = "Solo sorteos de hoy ya publicados"
@@ -537,7 +499,10 @@ def formatear_b2b3_fecha(top10, fecha, total_sorteos, total_nums, es_hoy):
     for i, (num, cnt) in enumerate(top10, 1):
         pct = cnt / total_nums * 100 if total_nums else 0
         par_str = f"{num:02d}/{inv_of(num):02d}"
-        lineas.append(f"`{i:<2}{S} {par_str:<7}{S} {cnt:<5}{S} {pct:.0f}%`")
+        marca = "        "
+        if b1s and (num in b1s or inv_of(num) in b1s):
+            marca = "[salio] "
+        lineas.append(f"`{i:<2}{S} {par_str:<7}{S} {marca}{cnt:<5}{S} {pct:.0f}%`")
     lineas.append("")
     nums = [f"{n:02d}/{inv_of(n):02d}" for n, _ in top10]
     lineas.append(f"*Pool:* {', '.join(nums)}")
@@ -547,52 +512,6 @@ def formatear_b2b3_fecha(top10, fecha, total_sorteos, total_nums, es_hoy):
 def inv_of(n):
     return (n % 10) * 10 + n // 10
 
-
-def formatear_anguila(numeros, df):
-    ang = df[df["loteria"].str.contains("Anguilla", case=False, na=False)].copy()
-    if ang.empty:
-        return "No hay datos de Anguilla."
-    ang["horario"] = ang["loteria"].str.replace("Anguilla", "", case=False).str.strip()
-    pool = set(numeros)
-    for n in numeros:
-        pool.add(inverso(n))
-    match = ang[ang["b1"].isin(pool)]
-    if match.empty:
-        return "Ninguno de esos numeros ha salido en B1 de Anguilla."
-    fechas = set(match["fecha"])
-    rows = ang[ang["fecha"].isin(fechas)]
-    contador = Counter()
-    horarios_por_num = defaultdict(set)
-    for _, row in rows.iterrows():
-        b1 = int(row["b1"])
-        contador[b1] += 1
-        horarios_por_num[b1].add(row["horario"])
-    lineas = [f"\U0001f41d *Anguila B1={numeros}*"]
-    lineas.append(f"{len(match)} coincidencias en {len(fechas)} dias")
-    lineas.append(f"Total sorteos: {len(rows)}\n")
-    lineas.append(f"`# {S} NUM {S} FREC {S} HORARIOS`")
-    lineas.append("`" + "-" * 35 + "`")
-    for i, (num, count) in enumerate(contador.most_common(5), 1):
-        hrs = ", ".join(sorted(horarios_por_num[num])[:3])
-        if len(horarios_por_num[num]) > 3:
-            hrs += "..."
-        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<3} {S} {hrs:<15}`")
-    return "\n".join(lineas)
-
-def formatear_anguila_seq(b1, hora, contador, sig_tag, total_dias):
-    if contador is None:
-        return f"No hay suficientes datos para {b1:02d} a las {hora}.\n\n*Horarios:* {', '.join(anguila_horarios_ordenados())}"
-    if not contador:
-        return f"El numero {b1:02d} a las {hora} nunca se repitio en la hora siguiente ({sig_tag}) en {total_dias} dias."
-    lineas = [f"\U0001f41d *Anguila {hora} -> {sig_tag}*"]
-    lineas.append(f"B1={b1:02d} | {total_dias} dias historicos con esta secuencia")
-    lineas.append(f"")
-    lineas.append(f"`# {S} NUM {S} FREC {S}  %`")
-    lineas.append("`" + "-" * 25 + "`")
-    for i, (num, count) in enumerate(contador.most_common(10), 1):
-        pct = count / total_dias * 100
-        lineas.append(f"`{i:<2}{S} {num:<2} {S} {count:<4}{S} {pct:.0f}%`")
-    return "\n".join(lineas)
 
 def formatear_anguila_auto(counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b):
     lineas = [f"\U0001f41d *ANGUILA {tag_sig} (automatico)*"]
@@ -604,7 +523,7 @@ def formatear_anguila_auto(counter_a, counter_b, b1_actual, tag_actual, tag_sig,
     else:
         lineas.append("Sin historial para esta transicion.")
     lineas.append("")
-    lineas.append(f"\U0001f50d *10 B2/B3 (Anguilas con los B1 de hoy hasta {tag_actual}):*")
+    lineas.append(f"\U0001f50d *10 B1s (dias con los B1 de hoy hasta {tag_actual}):*")
     if counter_b:
         for i, (num, count) in enumerate(counter_b.most_common(10), 1):
             lineas.append(f"`{i:<2}{S} {num:02d}{S} {count:<5}`")

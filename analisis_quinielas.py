@@ -590,9 +590,9 @@ def predecir_anguila_auto(df):
     ANGUILA SIGUIENTE HORA automatico.
     Toma el ultimo sorteo de Anguilla de hoy y predice la siguiente hora.
     Parte A: 5 numeros que salieron en la siguiente hora (mismo dia) tras ese B1.
-    Parte B: 10 B2/B3 de los sorteos de Anguilla donde el B1 coincide con los
-             numeros que han salido hoy hasta la hora actual, en los dias
-             historicos con maxima coincidencia (incluye inversos).
+    Parte B: 10 B1 de TODOS los sorteos de Anguilla en los dias historicos donde
+             salio al menos 1 de los B1 de hoy hasta la hora actual (incluye
+             inversos y excluye los numeros que ya salieron hoy).
     Devuelve: (counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b)
     """
     from collections import Counter, defaultdict
@@ -662,32 +662,22 @@ def predecir_anguila_auto(df):
             if f_sig in sig_fb:
                 counter_a[sig_fb[f_sig]] += 1
 
-    # PARTE B: dias con maxima coincidencia con TODOS los B1 de hoy hasta ahora;
-    # en esos dias toma los B2/B3 de los sorteos de Anguilla donde el B1 coincide
-    # con los numeros de hoy (excluye numeros que ya salieron hoy).
+    # PARTE B: cualquier dia historico (excepto hoy) donde salio al menos 1 de
+    # los B1 de hoy; en esos dias cuenta los B1 de TODOS los sorteos de Anguilla,
+    # excluyendo los numeros que ya salieron hoy (numero e inverso).
     pool_b = set()
     for t in tags_hoy:
         pool_b.add(hoy_b1[t])
         pool_b.add(inverso(hoy_b1[t]))
     counter_b = Counter()
     if pool_b:
-        match_count = {}
+        ya_salieron = set(pool_b)
         for f, bs in fecha_b1s.items():
-            if f == hoy:
+            if f == hoy or not (pool_b & bs):
                 continue
-            m = len(pool_b & bs)
-            if m:
-                match_count[f] = m
-        if match_count:
-            max_m = max(match_count.values())
-            mejores = {f for f, m in match_count.items() if m == max_m}
-            ya_salieron = {hoy_b1[t] for t in tags_hoy}
-            for f in mejores:
-                for b1, b2, b3 in ang_draws.get(f, []):
-                    if b1 in pool_b:
-                        for comp in (b2, b3):
-                            if comp not in ya_salieron:
-                                counter_b[comp] += 1
+            for b1, _b2, _b3 in ang_draws.get(f, []):
+                if b1 not in ya_salieron:
+                    counter_b[b1] += 1
 
     total_a = sum(counter_a.values())
     total_b = sum(counter_b.values())
@@ -1099,6 +1089,20 @@ def b2b3_frecuentes_fecha(df, fecha, top=10, todos=False):
     if todos:
         return contador.most_common(), len(filas), sum(contador.values())
     return contador.most_common(top), len(filas), sum(contador.values())
+
+
+def b1s_de_fecha(df, fecha):
+    """
+    Conjunto de B1 (enteros) sorteados en una fecha, de todas las loterias.
+    Se usa para marcar [salio] en el boton B2/B3 de ayer.
+    """
+    salidos = set()
+    for valor in df.loc[df["fecha"] == fecha, "b1"]:
+        try:
+            salidos.add(int(valor))
+        except (TypeError, ValueError):
+            continue
+    return salidos
 
 
 _kino_actualizado_hoy = None
