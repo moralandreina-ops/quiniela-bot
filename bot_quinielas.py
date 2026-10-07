@@ -841,13 +841,13 @@ def main():
     app.bot_data["anguila_cache_dias"] = ang_dias
 
     conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
+        entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancelar), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
         states={
             METHOD: [CallbackQueryHandler(metodo_handler), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
             NUMBERS: [MessageHandler(filters.TEXT & ~filters.COMMAND, numeros_handler), CallbackQueryHandler(metodo_handler)],
             LOTERIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, loteria_handler), CallbackQueryHandler(metodo_handler)],
         },
-        fallbacks=[CommandHandler(["cancel", "cancelar"], cancel), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
+        fallbacks=[CommandHandler(["cancel", "cancelar"], cancelar), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
     )
     app.add_handler(conv)
     print("Bot iniciado.", flush=True)
