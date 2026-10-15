@@ -796,6 +796,42 @@ def iniciar_health_server():
                 pass
     threading.Thread(target=self_ping, daemon=True).start()
 
+def iniciar_refresh_periodico(app):
+    """Hilo daemon que re-ejecuta actualizar_datos y recarga df/indices/caches cada 6 horas.
+
+    El bot solo actualizaba datos al arrancar y como Render nunca reinicia la instancia
+    (self-ping cada 300s), los datos en memoria quedaban congelados. Este hilo los mantiene
+    frescos aunque nadie reinicie el servicio.
+    """
+    import threading
+    import time as _time
+
+    INTERVALO_SEG = 6 * 3600
+
+    def _refrescar():
+        try:
+            from actualizar_datos import main as actualizar
+            actualizar()
+            nuevo_df = cargar_datos()
+            nuevos_idx = construir_indices(nuevo_df)
+            ang_cache, ang_dias = precomputar_cache_anguila(nuevo_df)
+            app.bot_data["df"] = nuevo_df
+            app.bot_data["b1_a_fechas"] = nuevos_idx
+            app.bot_data["anguila_cache"] = ang_cache
+            app.bot_data["anguila_cache_dias"] = ang_dias
+            print(f"Refresh periodico OK: {len(nuevo_df):,} registros, hasta {nuevo_df['fecha'].max()}", flush=True)
+        except Exception as e:
+            print(f"Refresh periodico fallo (se reintenta en {INTERVALO_SEG // 3600}h): {e}", flush=True)
+
+    def _loop():
+        while True:
+            _time.sleep(INTERVALO_SEG)
+            _refrescar()
+
+    threading.Thread(target=_loop, daemon=True).start()
+    print(f"Refresh periodico programado cada {INTERVALO_SEG // 3600}h", flush=True)
+
+
 def main():
     import sys
     # redeploy trigger 30-jul-2026
@@ -839,6 +875,8 @@ def main():
     app.bot_data["b1_a_fechas"] = b1_a_fechas
     app.bot_data["anguila_cache"] = ang_cache
     app.bot_data["anguila_cache_dias"] = ang_dias
+
+    iniciar_refresh_periodico(app)
 
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start), CommandHandler("menu", menu_command), CommandHandler("cancelar", cancelar), MessageHandler(filters.TEXT & ~filters.COMMAND, start)],
