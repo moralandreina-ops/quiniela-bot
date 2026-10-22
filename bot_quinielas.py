@@ -19,7 +19,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
-from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, cargar_secuencias, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, b2b3_frecuentes_fecha, b1s_de_fecha, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer, cruzar_secuencias_lotseq, b1_ayer_loteria, transformar_reverso, actualizar_powerball, predecir_powerball_desde_ultimo
+from analisis_quinielas import cargar_datos, construir_indices, inverso, scrapear_hoy, predecir_b1, cargar_secuencias, precomputar_cache_anguila, predecir_anguila_auto, predecir_loteria_secuencia, buscar_loterias, metodo_super_kino, b2b3_frecuentes_fecha, b1s_de_fecha, super_pale_dia, super_pale_dia_como_hoy, super_pale_pares, hoy_dr, actualizar_kino, guardar_prediccion_kino, aciertos_prediccion_ayer, cruzar_secuencias_lotseq, b1_ayer_loteria, transformar_reverso, actualizar_powerball, predecir_powerball_desde_ultimo
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def teclado_principal():
         [InlineKeyboardButton("\U0001f3b2 PREDICCION MANUAL", callback_data="manual")],
         [InlineKeyboardButton("\U0001f50d B2/B3", callback_data="b2b3_menu")],
         [InlineKeyboardButton("\U0001f41d ANGUILA SIGUIENTE HORA", callback_data="anguila")],
-        [InlineKeyboardButton(f"\U0001f9e7 SUPER PALE UN DIA COMO HOY ({hoy.day}/{hoy.month})", callback_data="super_pale")],
+        [InlineKeyboardButton("\U0001f9e7 SUPER PALE HOY / MAÑANA", callback_data="super_pale_menu")],
         [InlineKeyboardButton("\U0001f3e0 SELECCIONAR LOTERIA", callback_data="loteria")],
         [InlineKeyboardButton("\U0001f3af SECUENCIAS x LOTSEQ", callback_data="secuencias")],
         [InlineKeyboardButton("\U0001f3c6 SUPER KINO", callback_data="super_kino")],
@@ -49,6 +49,16 @@ def teclado_b2b3():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"📅 B2/B3 de HOY {hoy.day}/{hoy.month} (lo que ya salio)", callback_data="b2b3_hoy")],
         [InlineKeyboardButton(f"📄 B2/B3 de AYER {ayer.day}/{ayer.month}", callback_data="b2b3_ayer")],
+        [InlineKeyboardButton("🔙 Atras", callback_data="atras")],
+    ])
+
+def teclado_super_pale():
+    """Submenu SUPER PALE con las fechas reales de hoy y manana."""
+    hoy = hoy_dr()
+    manana = hoy + timedelta(days=1)
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"🧧 SUPER PALE HOY ({hoy.day}/{hoy.month})", callback_data="super_pale_hoy")],
+        [InlineKeyboardButton(f"🧧 SUPER PALE DE MAÑANA ({manana.day}/{manana.month})", callback_data="super_pale_manana")],
         [InlineKeyboardButton("🔙 Atras", callback_data="atras")],
     ])
 
@@ -293,14 +303,37 @@ async def _atender_boton(query, context: ContextTypes.DEFAULT_TYPE):
             texto = "Error interno en ANGUILA: %s\n\nIntenta mas tarde." % str(e)
         await _editar(query, texto, parse_mode="Markdown", reply_markup=teclado_principal())
         return METHOD
-    elif query.data == "super_pale":
+    elif query.data == "super_pale_menu":
+        await _editar(query, "¿De qué día quieres ver el SUPER PALE?",
+                      reply_markup=teclado_super_pale())
+        return METHOD
+    elif query.data == "super_pale_hoy":
         await _editar(query, "\U0001f9e7 Buscando B1s que salieron un dia como hoy...")
-        df = context.bot_data["df"]
-        contador, hoy, total = await asyncio.to_thread(super_pale_dia_como_hoy, df)
-        if contador is None:
-            await _editar(query, "Sin datos para un dia como hoy.", reply_markup=teclado_principal())
-            return METHOD
-        texto = formatear_super_pale(contador, hoy, total)
+        try:
+            df = context.bot_data["df"]
+            contador, fecha, total = await asyncio.to_thread(super_pale_dia_como_hoy, df)
+            if contador is None:
+                await _editar(query, "Sin datos para un dia como hoy.", reply_markup=teclado_principal())
+                return METHOD
+            texto = formatear_super_pale(contador, fecha, total)
+        except Exception as e:
+            logger.error("Error en SUPER PALE HOY: %s", e, exc_info=True)
+            texto = "Error interno en SUPER PALE HOY: %s\n\nIntenta mas tarde." % str(e)
+        await _editar(query, texto, parse_mode="Markdown", reply_markup=teclado_principal())
+        return METHOD
+    elif query.data == "super_pale_manana":
+        fecha = hoy_dr() + timedelta(days=1)
+        await _editar(query, "\U0001f9e7 Buscando B1s que salieron un dia como mañana...")
+        try:
+            df = context.bot_data["df"]
+            contador, fecha, total = await asyncio.to_thread(super_pale_dia, df, fecha)
+            if contador is None:
+                await _editar(query, "Sin datos para un dia como mañana.", reply_markup=teclado_principal())
+                return METHOD
+            texto = formatear_super_pale(contador, fecha, total, etiqueta="MAÑANA")
+        except Exception as e:
+            logger.error("Error en SUPER PALE DE MAÑANA: %s", e, exc_info=True)
+            texto = "Error interno en SUPER PALE DE MAÑANA: %s\n\nIntenta mas tarde." % str(e)
         await _editar(query, texto, parse_mode="Markdown", reply_markup=teclado_principal())
         return METHOD
     elif query.data == "loteria":
@@ -533,8 +566,11 @@ def formatear_anguila_auto(counter_a, counter_b, b1_actual, tag_actual, tag_sig,
     lineas.append(f"A: {total_a} casos | B: {total_b} casos")
     return "\n".join(lineas)
 
-def formatear_super_pale(contador, hoy, total):
-    lineas = [f"\U0001f9e7 *SUPER PALE {hoy.day}/{hoy.month}*"]
+def formatear_super_pale(contador, fecha, total, etiqueta=None):
+    titulo = f"SUPER PALE {fecha.day}/{fecha.month}"
+    if etiqueta:
+        titulo += f" ({etiqueta})"
+    lineas = [f"\U0001f9e7 *{titulo}*"]
     lineas.append("\U0001f525 *10 BOLOS MAS FRECUENTES (incluye inverso):*")
     lineas.append(f"`# {S} NUM {S} VECES`")
     lineas.append("`" + "-" * 24 + "`")
@@ -549,6 +585,10 @@ def formatear_super_pale(contador, hoy, total):
         binv = (b % 10) * 10 + b // 10
         lineas.append(f"`{a:02d}/{ainv:02d}-{b:02d}/{binv:02d}`")
     return "\n".join(lineas)
+
+def formatear_super_pale_manana(contador, fecha, total, fecha_str=None):
+    """Compatibilidad: mismo formato, con la etiqueta MAÑANA."""
+    return formatear_super_pale(contador, fecha, total, etiqueta="MAÑANA")
 
 def formatear_decenas(numeros):
     decenas = analizar_decenas(numeros)

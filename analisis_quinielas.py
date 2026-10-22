@@ -683,25 +683,31 @@ def predecir_anguila_auto(df):
     total_b = sum(counter_b.values())
     return counter_a, counter_b, b1_actual, tag_actual, tag_sig, total_a, total_b
 
-def super_pale_dia_como_hoy(df):
+def super_pale_dia(df, fecha=None):
     """
-    SUPER PALE: B1s que salieron 'un dia como hoy' en años anteriores
-    (mismo mes y dia en todos los años, excluyendo el dia de hoy).
-    Considera inversos: 03 y 30 se cuentan como el mismo par (k=min(n,inv)).
-    Devuelve: (contador_pares, hoy, total_sorteos)
-      - contador_pares: Counter con key=None siempre (estructura conservada);
-         en su lugar devuelve ContadorOBS: se usa pair-key para conteo.
+    SUPER PALE de una fecha de referencia (por defecto hoy).
+
+    Usa los B1s que salieron 'un dia como <fecha>' en anos anteriores:
+    mismo mes y dia, con fecha ESTRICTAMENTE anterior a <fecha> (sin
+    look-ahead). Considera inversos: 03 y 30 cuentan como el mismo par.
+    Devuelve: (contador_pares, fecha, total_sorteos); contador None si no
+    hay historial para ese dia.
     """
     from collections import Counter
-    hoy = hoy_dr()
+    fecha = fecha or hoy_dr()
     s = pd.to_datetime(df["fecha"])
-    mask = (s.dt.month == hoy.month) & (s.dt.day == hoy.day) & (s.dt.date != hoy)
+    mask = ((s.dt.month == fecha.month) & (s.dt.day == fecha.day)
+            & (s.dt.date < fecha))
     filtrado = df[mask]
     if filtrado.empty:
-        return None, hoy, 0
+        return None, fecha, 0
     # Contar por par (min(n, inverso(n))) -> 03 y 30 cuentan juntos
     contador = Counter(_par_key(int(b)) for b in filtrado["b1"])
-    return contador, hoy, sum(contador.values())
+    return contador, fecha, sum(contador.values())
+
+def super_pale_dia_como_hoy(df):
+    """SUPER PALE de hoy (wrapper historico de super_pale_dia)."""
+    return super_pale_dia(df, hoy_dr())
 
 def _par_key(n):
     return min(n, ((n % 10) * 10 + n // 10))
