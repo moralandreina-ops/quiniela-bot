@@ -48,6 +48,33 @@ LOTTERY_MAP = {
 
 QUEMAITO = "El Quemaito Mayor"
 
+# ==========================================================================
+# PRUEBA TEMPORAL (22 oct 2026): loterias excluidas de TODOS los metodos.
+# No borra nada del Excel: solo se filtran los datos al cargarlos/usarlos.
+# Para volver a incluirlas, dejar la tupla vacia:  LOTERIAS_EXCLUIDAS = ()
+# ==========================================================================
+LOTERIAS_EXCLUIDAS = ("Haiti", "Georgia", "New Jersey")
+
+def loteria_excluida(nombre):
+    """True si la loteria cae en la lista temporal de exclusion."""
+    if not LOTERIAS_EXCLUIDAS:
+        return False
+    n = str(nombre).lower()
+    return any(x.lower() in n for x in LOTERIAS_EXCLUIDAS)
+
+def filtrar_excluidas(df):
+    """Quita del DataFrame las loterias de la prueba temporal (no toca el Excel)."""
+    if not LOTERIAS_EXCLUIDAS or df is None or df.empty:
+        return df
+    return df[~df["loteria"].map(loteria_excluida)]
+
+def filtrar_scrape(scrape):
+    """Quita las loterias excluidas de un dict {loteria: b1}."""
+    if not LOTERIAS_EXCLUIDAS or not scrape:
+        return scrape
+    return {k: v for k, v in scrape.items() if not loteria_excluida(k)}
+
+
 def inverso(n):
     return int(str(n).zfill(2)[::-1])
 
@@ -60,6 +87,7 @@ def cargar_datos():
     df["b2"] = df["b2"].astype("Int64")
     df["b3"] = df["b3"].astype("Int64")
     df = df.dropna()
+    df = filtrar_excluidas(df)
     return df
 
 def construir_indices(df):
@@ -235,6 +263,8 @@ def scrapear_fecha(fecha):
             continue
         nombre = ev.get("name", "")
         inicio = ev.get("startDate", "")
+        if loteria_excluida(nombre):
+            continue
         loterias.append((nombre, inicio, b1))
     if not loterias:
         print(f"No se encontraron sorteos en {fecha_str}.")
@@ -244,7 +274,7 @@ def scrapear_fecha(fecha):
     return [b1 for _, _, b1 in loterias]
 
 def scrapear_hoy():
-    return scrapear_fecha(hoy_dr())
+    return filtrar_scrape(scrapear_fecha(hoy_dr()))
 
 def scrapear_fecha_dict(fecha):
     import json
@@ -285,7 +315,7 @@ def scrapear_fecha_dict(fecha):
         nombre = ev.get("name", "")
         nombre_norm = LOTTERY_MAP.get(nombre, nombre)
         resultado[nombre_norm] = b1
-    return resultado
+    return filtrar_scrape(resultado)
 
 def analizar_decenas(numeros):
     decenas = {}
@@ -621,6 +651,7 @@ def predecir_anguila_auto(df):
     hoy_b1 = {}
     try:
         scrape = scrapear_fecha_dict(hoy_dr())
+        scrape = filtrar_scrape(scrape)
     except Exception:
         scrape = obtener_scrape_hoy()
     for nombre, b1 in scrape.items():
@@ -843,6 +874,8 @@ def buscar_loterias(query, df):
         loterias.append(QUEMAITO)
     matches = []
     for l in sorted(loterias):
+        if loteria_excluida(l):
+            continue
         l_norm = re.sub(r"[^a-z0-9]", "", l.lower())
         if q in l_norm:
             matches.append(l)
@@ -927,6 +960,8 @@ def obtener_scrape_hoy():
         return _scrape_cache
     try:
         scrape = scrapear_fecha_dict(hoy)
+        scrape = filtrar_scrape(scrape)
+        scrape = filtrar_scrape(scrape)
         if scrape:
             _scrape_cache = scrape
             _scrape_cache_fecha = hoy
